@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "github.com/edaywalid/sched/proto";
+
+service EngineService {
+  rpc StartWorkflow(StartWorkflowRequest) returns (StartWorkflowResponse);
+  
+  rpc CompleteActivity(CompleteActivityRequest) returns (CompleteActivityResponse);
+  
+  rpc PollActivityTask(PollActivityTaskRequest) returns (PollActivityTaskResponse);
+  
+  rpc SignalWorkflow(SignalWorkflowRequest) returns (SignalWorkflowResponse);
+  
+  rpc GetWorkflowStatus(GetWorkflowStatusRequest) returns (GetWorkflowStatusResponse);
+}
+
+message StartWorkflowRequest {
+  string workflow_name = 1;
+  bytes input = 2;
+}
+
+message StartWorkflowResponse {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+message CompleteActivityRequest {
+  string task_token = 1;
+  bytes result = 2;
+  string error = 3;
+}
+
+message CompleteActivityResponse {
+  bool success = 1;
+}
+
+message PollActivityTaskRequest {
+  string task_queue = 1;
+  int32 timeout_seconds = 2;
+}
+
+message PollActivityTaskResponse {
+  string task_token = 1;
+  string activity_name = 2;
+  bytes input = 3;
+  string workflow_id = 4;
+}
+
+message SignalWorkflowRequest {
+  string workflow_id = 1;
+  string signal_name = 2;
+  bytes input = 3;
+}
+
+message SignalWorkflowResponse {
+  bool success = 1;
+}
+
+message GetWorkflowStatusRequest {
+  string workflow_id = 1;
+}
+
+message GetWorkflowStatusResponse {
+  string status = 1;
+  bytes result = 2;
+  string error = 3;
+}
