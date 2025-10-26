@@ -1,0 +1,539 @@
+package templates
+
+import "github.com/edaywalid/sched/proto"
+import "fmt"
+import "time"
+
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title } - Sched Dashboard</title>
+			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+			<script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js"></script>
+			<style>
+				* {
+					margin: 0;
+					padding: 0;
+					box-sizing: border-box;
+				}
+				
+				body {
+					font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+					background: #f5f5f5;
+					min-height: 100vh;
+					padding: 2rem;
+				}
+				
+				.container {
+					max-width: 1400px;
+					margin: 0 auto;
+				}
+				
+				header {
+					background: #ffffff;
+					padding: 2rem;
+					border-radius: 4px;
+					border-bottom: 2px solid #e0e0e0;
+					margin-bottom: 2rem;
+					display: flex;
+					justify-content: space-between;
+					align-items: center;
+				}
+				
+				h1 {
+					color: #212121;
+					font-size: 2rem;
+					font-weight: 600;
+				}
+				
+				.refresh-btn {
+					padding: 0.75rem 1.5rem;
+					background: #212121;
+					color: white;
+					border: none;
+					border-radius: 4px;
+					cursor: pointer;
+					font-size: 1rem;
+					font-weight: 500;
+					transition: all 0.2s;
+				}
+				
+				.refresh-btn:hover {
+					background: #424242;
+					box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+				}
+				
+				.metrics-grid {
+					display: grid;
+					grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+					gap: 1.5rem;
+					margin-bottom: 2rem;
+				}
+				
+				.metric-card {
+					background: #ffffff;
+					padding: 1.5rem;
+					border-radius: 4px;
+					border: 1px solid #e0e0e0;
+					text-align: center;
+					transition: all 0.2s;
+				}
+				
+				.metric-card:hover {
+					border-color: #bdbdbd;
+					box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+				}
+				
+				.metric-value {
+					font-size: 3rem;
+					font-weight: 600;
+					color: #212121;
+					margin-bottom: 0.5rem;
+				}
+				
+				.metric-label {
+					font-size: 0.9rem;
+					color: #757575;
+					text-transform: uppercase;
+					letter-spacing: 1px;
+					font-weight: 500;
+				}
+				
+				.metric-card.running .metric-value { color: #1976D2; }
+				.metric-card.completed .metric-value { color: #388E3C; }
+				.metric-card.failed .metric-value { color: #D32F2F; }
+				
+				.workflows-section {
+					background: #ffffff;
+					padding: 2rem;
+					border-radius: 4px;
+					border: 1px solid #e0e0e0;
+				}
+				
+				.section-header {
+					display: flex;
+					justify-content: space-between;
+					align-items: center;
+					margin-bottom: 2rem;
+					padding-bottom: 1rem;
+					border-bottom: 2px solid #e0e0e0;
+				}
+				
+				.workflow-list {
+					display: flex;
+					flex-direction: column;
+					gap: 1rem;
+				}
+				
+				.workflow-card {
+					background: #fafafa;
+					border: 1px solid #e0e0e0;
+					border-radius: 4px;
+					padding: 1.5rem;
+					transition: all 0.2s;
+					cursor: pointer;
+				}
+				
+				.workflow-card:hover {
+					border-color: #212121;
+					background: #ffffff;
+					box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+				}
+				
+				.workflow-header {
+					display: flex;
+					justify-content: space-between;
+					align-items: center;
+					margin-bottom: 1rem;
+				}
+				
+				.workflow-name {
+					font-size: 1.25rem;
+					font-weight: 600;
+					color: #212121;
+				}
+				
+				.status-badge {
+					padding: 0.5rem 1rem;
+					border-radius: 4px;
+					font-size: 0.85rem;
+					font-weight: 600;
+					text-transform: uppercase;
+					letter-spacing: 0.5px;
+				}
+				
+				.status-running { background: #E3F2FD; color: #1976D2; border: 1px solid #1976D2; }
+				.status-completed { background: #E8F5E9; color: #388E3C; border: 1px solid #388E3C; }
+				.status-failed { background: #FFEBEE; color: #D32F2F; border: 1px solid #D32F2F; }
+				.status-pending { background: #FFF3E0; color: #F57C00; border: 1px solid #F57C00; }
+				
+				.workflow-meta {
+					display: grid;
+					grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+					gap: 1rem;
+					font-size: 0.9rem;
+					color: #616161;
+				}
+				
+				.meta-label {
+					font-weight: 600;
+					margin-right: 0.5rem;
+					color: #212121;
+				}
+				
+				.workflow-detail {
+					margin-top: 2rem;
+					background: #ffffff;
+					padding: 2rem;
+					border-radius: 4px;
+					border: 1px solid #e0e0e0;
+				}
+				
+				.timeline {
+					position: relative;
+					padding-left: 2rem;
+					margin-top: 2rem;
+				}
+				
+				.timeline::before {
+					content: '';
+					position: absolute;
+					left: 9px;
+					top: 0;
+					bottom: 0;
+					width: 2px;
+					background: #bdbdbd;
+				}
+				
+				.timeline-event {
+					position: relative;
+					margin-bottom: 1.5rem;
+					padding-left: 2rem;
+				}
+				
+				.event-marker {
+					position: absolute;
+					left: 0;
+					top: 4px;
+					width: 20px;
+					height: 20px;
+					border-radius: 50%;
+					background: #212121;
+					border: 3px solid white;
+					box-shadow: 0 0 0 2px #212121;
+				}
+				
+				.event-content {
+					background: #fafafa;
+					padding: 1rem;
+					border-radius: 4px;
+					border-left: 3px solid #212121;
+				}
+				
+				.event-type {
+					font-weight: 600;
+					color: #212121;
+					margin-bottom: 0.5rem;
+					text-transform: uppercase;
+					font-size: 0.85rem;
+					letter-spacing: 0.5px;
+				}
+				
+				.event-time {
+					font-size: 0.85rem;
+					color: #757575;
+					font-family: 'Courier New', monospace;
+				}
+				
+				.loading {
+					text-align: center;
+					padding: 3rem;
+					color: #757575;
+					font-size: 1.2rem;
+				}
+				
+				.start-workflow-section {
+					background: #ffffff;
+					padding: 2rem;
+					border-radius: 4px;
+					border: 1px solid #e0e0e0;
+					margin-bottom: 2rem;
+				}
+				
+				.workflow-form {
+					display: grid;
+					grid-template-columns: 1fr 1fr 120px;
+					gap: 1rem;
+					align-items: end;
+				}
+				
+				.form-group {
+					display: flex;
+					flex-direction: column;
+				}
+				
+				.form-label {
+					font-size: 0.9rem;
+					font-weight: 600;
+					color: #212121;
+					margin-bottom: 0.5rem;
+				}
+				
+				.form-input {
+					padding: 0.75rem;
+					border: 1px solid #e0e0e0;
+					border-radius: 4px;
+					font-size: 1rem;
+					font-family: inherit;
+					transition: border-color 0.2s;
+				}
+				
+				.form-input:focus {
+					outline: none;
+					border-color: #212121;
+				}
+				
+				.start-btn {
+					padding: 0.75rem 1.5rem;
+					background: #212121;
+					color: white;
+					border: none;
+					border-radius: 4px;
+					cursor: pointer;
+					font-size: 1rem;
+					font-weight: 500;
+					transition: all 0.2s;
+					height: fit-content;
+				}
+				
+				.start-btn:hover {
+					background: #424242;
+					box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+				}
+				
+				.start-btn:disabled {
+					background: #bdbdbd;
+					cursor: not-allowed;
+				}
+				
+				.success-message {
+					margin-top: 1rem;
+					padding: 0.75rem;
+					background: #E8F5E9;
+					color: #388E3C;
+					border-left: 3px solid #388E3C;
+					border-radius: 4px;
+					font-weight: 500;
+				}
+				
+				.error-message {
+					margin-top: 1rem;
+					padding: 0.75rem;
+					background: #FFEBEE;
+					color: #D32F2F;
+					border-left: 3px solid #D32F2F;
+					border-radius: 4px;
+					font-weight: 500;
+				}
+			</style>
+		</head>
+		<body>
+			<div class="container">
+				{ children... }
+			</div>
+			<script>
+				// Auto-refresh every 5 seconds
+				setInterval(() => {
+					htmx.trigger('#workflows-container', 'refresh');
+					htmx.trigger('#metrics-container', 'refresh');
+				}, 5000);
+			</script>
+		</body>
+	</html>
+}
+
+templ Index(metrics *proto.WorkflowMetrics, workflows []*proto.WorkflowExecutionInfo) {
+	@Layout("Dashboard") {
+		<header>
+			<h1>Sched Workflow Engine</h1>
+			<button class="refresh-btn" onclick="location.reload()">Refresh</button>
+		</header>
+		
+		<div class="start-workflow-section">
+			<h2 style="margin-bottom: 1rem;">Start Workflow</h2>
+			<form class="workflow-form" hx-post="/api/start-workflow" hx-target="#form-message" hx-swap="innerHTML">
+				<div class="form-group">
+					<label class="form-label" for="workflow-name">Workflow Name</label>
+					<input type="text" id="workflow-name" name="workflow_name" class="form-input" placeholder="e.g., HelloWorld, MonthlyReport" required/>
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="workflow-input">Input (JSON or text)</label>
+					<input type="text" id="workflow-input" name="input" class="form-input" placeholder='e.g., "John Doe" or {"key": "value"}'/>
+				</div>
+				<button type="submit" class="start-btn">Start</button>
+			</form>
+			<div id="form-message"></div>
+		</div>
+		
+		<div id="metrics-container" hx-get="/api/metrics-html" hx-trigger="refresh" hx-swap="outerHTML">
+			@MetricsGrid(metrics)
+		</div>
+		
+		<div class="workflows-section">
+			<div class="section-header">
+				<h2>Workflows</h2>
+			</div>
+			<div id="workflows-container" hx-get="/api/workflows-html" hx-trigger="refresh" hx-swap="outerHTML">
+				@WorkflowList(workflows)
+			</div>
+		</div>
+	}
+}
+
+templ MetricsGrid(metrics *proto.WorkflowMetrics) {
+	<div id="metrics-container" class="metrics-grid" hx-get="/api/metrics-html" hx-trigger="refresh" hx-swap="outerHTML">
+		<div class="metric-card">
+			<div class="metric-value">{ fmt.Sprintf("%d", metrics.TotalWorkflows) }</div>
+			<div class="metric-label">Total Workflows</div>
+		</div>
+		<div class="metric-card running">
+			<div class="metric-value">{ fmt.Sprintf("%d", metrics.RunningWorkflows) }</div>
+			<div class="metric-label">Running</div>
+		</div>
+		<div class="metric-card completed">
+			<div class="metric-value">{ fmt.Sprintf("%d", metrics.CompletedWorkflows) }</div>
+			<div class="metric-label">Completed</div>
+		</div>
+		<div class="metric-card failed">
+			<div class="metric-value">{ fmt.Sprintf("%d", metrics.FailedWorkflows) }</div>
+			<div class="metric-label">Failed</div>
+		</div>
+		<div class="metric-card">
+			<div class="metric-value">
+				if metrics.TotalWorkflows > 0 {
+					{ fmt.Sprintf("%.1f%%", float64(metrics.CompletedWorkflows) / float64(metrics.TotalWorkflows) * 100) }
+				} else {
+					0%
+				}
+			</div>
+			<div class="metric-label">Success Rate</div>
+		</div>
+		<div class="metric-card">
+			<div class="metric-value">{ fmt.Sprintf("%.0fms", metrics.AvgExecutionTimeMs) }</div>
+			<div class="metric-label">Avg Duration</div>
+		</div>
+	</div>
+}
+
+templ WorkflowList(workflows []*proto.WorkflowExecutionInfo) {
+	<div id="workflows-container" class="workflow-list" hx-get="/api/workflows-html" hx-trigger="refresh" hx-swap="outerHTML">
+		if len(workflows) == 0 {
+			<div style="text-align: center; padding: 3rem; color: #999;">
+				No workflows found. Start a workflow to see it here!
+			</div>
+		}
+		for _, wf := range workflows {
+			<div class="workflow-card" style="cursor: pointer;">
+				<a href={ templ.SafeURL(fmt.Sprintf("/workflow/%s", wf.WorkflowId)) } style="text-decoration: none; color: inherit; display: block;">
+					<div class="workflow-header">
+						<div class="workflow-name">{ wf.WorkflowName }</div>
+						<span class={ fmt.Sprintf("status-badge status-%s", wf.Status) }>{ wf.Status }</span>
+					</div>
+				<div class="workflow-meta">
+					<div>
+						<span class="meta-label">ID:</span>
+						{ wf.WorkflowId[:8] }...
+					</div>
+					<div>
+						<span class="meta-label">Started:</span>
+						{ time.Unix(wf.StartTime, 0).Format("2006-01-02 15:04:05") }
+					</div>
+					if wf.EndTime > 0 {
+						<div>
+							<span class="meta-label">Duration:</span>
+							{ fmt.Sprintf("%.2fs", float64(wf.EndTime - wf.StartTime)) }
+						</div>
+					}
+				</div>
+				if wf.Error != "" {
+					<div style="margin-top: 1rem; padding: 0.75rem; background: #FFEBEE; color: #D32F2F; border-radius: 4px; border-left: 3px solid #D32F2F; font-size: 0.9rem;">
+						<strong>Error:</strong> { wf.Error }
+					</div>
+				}
+				</a>
+			</div>
+		}
+	</div>
+}
+
+templ WorkflowDetail(details *proto.GetWorkflowDetailsResponse) {
+	@Layout("Workflow Detail") {
+		<header>
+			<h1>{ details.Execution.WorkflowName }</h1>
+			<button class="refresh-btn" onclick="history.back()">Back</button>
+		</header>
+		
+		<div class="workflow-detail">
+			<div class="workflow-header">
+				<div class="workflow-name">{ details.Execution.WorkflowName }</div>
+				<span class={ fmt.Sprintf("status-badge status-%s", details.Execution.Status) }>{ details.Execution.Status }</span>
+			</div>
+			
+			<div class="workflow-meta" style="margin-top: 2rem;">
+				<div>
+					<span class="meta-label">Workflow ID:</span>
+					<span style="font-family: monospace;">{ details.Execution.WorkflowId }</span>
+				</div>
+				<div>
+					<span class="meta-label">Started:</span>
+					{ time.Unix(details.Execution.StartTime, 0).Format("2006-01-02 15:04:05") }
+				</div>
+				if details.Execution.EndTime > 0 {
+					<div>
+						<span class="meta-label">Completed:</span>
+						{ time.Unix(details.Execution.EndTime, 0).Format("2006-01-02 15:04:05") }
+					</div>
+					<div>
+						<span class="meta-label">Duration:</span>
+						{ fmt.Sprintf("%.2fs", float64(details.Execution.EndTime - details.Execution.StartTime)) }
+					</div>
+				}
+			</div>
+			
+			if details.Execution.Result != "" {
+				<div style="margin-top: 2rem; padding: 1rem; background: #E8F5E9; border-left: 4px solid #388E3C; border-radius: 4px;">
+					<h3 style="margin-bottom: 0.5rem; color: #212121; font-weight: 600;">Result</h3>
+					<pre style="font-family: monospace; white-space: pre-wrap; word-break: break-word; color: #424242;">{ details.Execution.Result }</pre>
+				</div>
+			}
+			
+			if details.Execution.Error != "" {
+				<div style="margin-top: 2rem; padding: 1rem; background: #FFEBEE; border-left: 4px solid #D32F2F; border-radius: 4px;">
+					<h3 style="margin-bottom: 0.5rem; color: #212121; font-weight: 600;">Error</h3>
+					<pre style="font-family: monospace; white-space: pre-wrap; word-break: break-word; color: #424242;">{ details.Execution.Error }</pre>
+				</div>
+			}
+			
+			<div style="margin-top: 2rem;">
+				<h2 style="margin-bottom: 1rem;">Event History ({ fmt.Sprintf("%d", len(details.History)) } events)</h2>
+				<div class="timeline">
+					for _, event := range details.History {
+						<div class="timeline-event">
+							<div class="event-marker"></div>
+							<div class="event-content">
+								<div class="event-type">{ event.EventType }</div>
+								<div class="event-time">{ time.Unix(event.Timestamp, 0).Format("15:04:05.000") }</div>
+								if event.Details != "" {
+									<pre style="margin-top: 0.5rem; padding: 0.75rem; background: white; border-radius: 4px; font-size: 0.85rem; overflow-x: auto;">{ event.Details }</pre>
+								}
+							</div>
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+	}
+}
