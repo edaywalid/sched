@@ -1,7 +1,12 @@
 package engine
 
 type WorkflowTask struct {
-	Name  string
-	Input any
+	WorkflowID string
+	Name       string
+	Input      any
 }
 
+type Signal struct {
+	Name  string
+	Input []byte
+}
