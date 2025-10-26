@@ -1,27 +1,21 @@
 package engine
 
-import "fmt"
+import (
+	"time"
+)
 
-type WorkflowContext interface {
-	QueueActivity(name string, input any)
+type RetryPolicy struct {
+	InitialInterval    time.Duration
+	BackoffCoefficient float64
+	MaximumInterval    time.Duration
+	MaximumAttempts    int
 }
 
-type WorkflowFunc func(ctx WorkflowContext, input any) (any, error)
-
-type DefaultWorkflowContext struct {
-	engine *Engine
-}
-
-func NewDefaultWorkflowContext(engine *Engine) WorkflowContext {
-	return &DefaultWorkflowContext{engine: engine}
-}
-
-func (ctx *DefaultWorkflowContext) QueueActivity(name string, input any) {
-	af, ok := ctx.engine.activities[name]
-	if !ok {
-		fmt.Println("unknown activity : ", name)
-		return
+func DefaultRetryPolicy() RetryPolicy {
+	return RetryPolicy{
+		InitialInterval:    1 * time.Second,
+		BackoffCoefficient: 2.0,
+		MaximumInterval:    60 * time.Second,
+		MaximumAttempts:    3,
 	}
-	fmt.Println("running activity : ", name)
-	af(nil, input)
 }
