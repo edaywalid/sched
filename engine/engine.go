@@ -1,44 +1,68 @@
 package engine
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/edaywalid/sched/queue"
+)
 
 type Engine struct {
-	workflows  map[string]WorkflowFunc
-	activities map[string]ActivityFunc
-	queues     chan WorkflowTask
+	workflowTasks chan WorkflowTask
+	queue         queue.Queue
+	persistence   *PersistenceLayer
+	timerMgr      *TimerManager
+	signals       map[string]chan *Signal
+	signalsMu     sync.RWMutex
 }
 
-func NewEngine() Engine {
-	return Engine{
-		workflows:  make(map[string]WorkflowFunc),
-		activities: make(map[string]ActivityFunc),
-		queues:     make(chan WorkflowTask, 100),
+func NewEngine() *Engine {
+	persistence := NewPersistenceLayer()
+	return &Engine{
+		workflowTasks: make(chan WorkflowTask, 100),
+		queue:         queue.NewInMemoryQueue(), // Default to in-memory
+		persistence:   persistence,
+		timerMgr:      NewTimerManager(persistence),
+		signals:       make(map[string]chan *Signal),
 	}
 }
 
-func (e *Engine) RegisterWorkflow(name string, wf WorkflowFunc) {
-	e.workflows[name] = wf
+func NewEngineWithRedis(redisAddr string) (*Engine, error) {
+	q, err := queue.NewRedisQueue(redisAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Redis queue: %w", err)
+	}
+
+	persistence := NewPersistenceLayer()
+	return &Engine{
+		workflowTasks: make(chan WorkflowTask, 100),
+		queue:         q,
+		persistence:   persistence,
+		timerMgr:      NewTimerManager(persistence),
+		signals:       make(map[string]chan *Signal),
+	}, nil
 }
 
-func (e *Engine) RegisterActivity(name string, af ActivityFunc) {
-	e.activities[name] = af
-}
-
+// StartWorkflow queues a workflow task for workers to pick up
 func (e *Engine) StartWorkflow(name string, input any) error {
-	_, ok := e.workflows[name]
-	if !ok {
-		return fmt.Errorf("worflow not found")
+	workflowID := fmt.Sprintf("wf-%d", time.Now().UnixNano())
+
+	e.persistence.CreateWorkflowExecution(workflowID, name, input)
+
+	e.workflowTasks <- WorkflowTask{
+		WorkflowID: workflowID,
+		Name:       name,
+		Input:      input,
 	}
-	e.queues <- WorkflowTask{Name: name, Input: input}
+
 	return nil
 }
 
-func (e *Engine) StartExecutor() {
-	go func() {
-		for wt := range e.queues {
-			wf := e.workflows[wt.Name]
-			fmt.Println("starting workflow : ", wt.Name)
-			wf(NewDefaultWorkflowContext(e), wt.Input)
-		}
-	}()
+func (e *Engine) GetAllWorkflowExecutions() []*WorkflowExecution {
+	return e.persistence.GetAllExecutions()
+}
+
+func (e *Engine) GetWorkflowExecution(workflowID string) (*WorkflowExecution, error) {
+	return e.persistence.GetWorkflowExecution(workflowID)
 }
