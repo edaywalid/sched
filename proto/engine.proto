@@ -7,7 +7,14 @@ option go_package = "github.com/edaywalid/sched/proto";
 service EngineService {
   rpc StartWorkflow(StartWorkflowRequest) returns (StartWorkflowResponse);
   
-  rpc CompleteActivity(CompleteActivityRequest) returns (CompleteActivityResponse);
+  rpc PollWorkflowTask(PollWorkflowTaskRequest)
+      returns (PollWorkflowTaskResponse);
+  
+  rpc CompleteWorkflowTask(CompleteWorkflowTaskRequest)
+      returns (CompleteWorkflowTaskResponse);
+  
+  rpc CompleteActivity(CompleteActivityRequest)
+      returns (CompleteActivityResponse);
   
   rpc PollActivityTask(PollActivityTaskRequest) returns (PollActivityTaskResponse);
   
@@ -66,4 +73,37 @@ message GetWorkflowStatusResponse {
   string status = 1;
   bytes result = 2;
   string error = 3;
+}
+
+message PollWorkflowTaskRequest {
+  string task_queue = 1;
+  int32 timeout_seconds = 2;
+}
+
+message PollWorkflowTaskResponse {
+  string task_token = 1;
+  string workflow_name = 2;
+  bytes input = 3;
+  string workflow_id = 4;
+  string run_id = 5;
+}
+
+message CompleteWorkflowTaskRequest {
+  string task_token = 1;
+  bytes result = 2;
+  string error = 3;
+}
+
+message CompleteWorkflowTaskResponse {
+  bool success = 1;
+}
+
+message ScheduleActivityRequest {
+  string workflow_id = 1;
+  string activity_name = 2;
+  bytes input = 3;
+}
+
+message ScheduleActivityResponse {
+  string activity_id = 1;
 }
