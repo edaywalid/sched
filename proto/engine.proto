@@ -16,11 +16,25 @@ service EngineService {
   rpc CompleteActivity(CompleteActivityRequest)
       returns (CompleteActivityResponse);
   
-  rpc PollActivityTask(PollActivityTaskRequest) returns (PollActivityTaskResponse);
+  rpc PollActivityTask(PollActivityTaskRequest)
+      returns (PollActivityTaskResponse);
   
   rpc SignalWorkflow(SignalWorkflowRequest) returns (SignalWorkflowResponse);
   
-  rpc GetWorkflowStatus(GetWorkflowStatusRequest) returns (GetWorkflowStatusResponse);
+  rpc GetWorkflowStatus(GetWorkflowStatusRequest) 
+      returns (GetWorkflowStatusResponse);
+  
+  rpc ScheduleActivity(ScheduleActivityRequest)
+      returns (ScheduleActivityResponse);
+  
+  // Dashboard query methods
+  rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
+  
+  rpc GetWorkflowDetails(GetWorkflowDetailsRequest) 
+      returns (GetWorkflowDetailsResponse);
+  
+  rpc GetWorkflowMetrics(GetWorkflowMetricsRequest)
+      returns (GetWorkflowMetricsResponse);
 }
 
 message StartWorkflowRequest {
@@ -106,4 +120,60 @@ message ScheduleActivityRequest {
 
 message ScheduleActivityResponse {
   string activity_id = 1;
+}
+
+// Dashboard query messages
+message ListWorkflowsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string status_filter = 3; // "running", "completed", "failed", or empty for all
+}
+
+message WorkflowExecutionInfo {
+  string workflow_id = 1;
+  string run_id = 2;
+  string workflow_name = 3;
+  string status = 4;
+  int64 start_time = 5; // Unix timestamp
+  int64 end_time = 6;   // Unix timestamp
+  string result = 7;
+  string error = 8;
+}
+
+message ListWorkflowsResponse {
+  repeated WorkflowExecutionInfo workflows = 1;
+  string next_page_token = 2;
+}
+
+message GetWorkflowDetailsRequest {
+  string workflow_id = 1;
+}
+
+message WorkflowEvent {
+  string event_type = 1;
+  int64 timestamp = 2;
+  string details = 3;
+}
+
+message GetWorkflowDetailsResponse {
+  WorkflowExecutionInfo execution = 1;
+  repeated WorkflowEvent history = 2;
+}
+
+message GetWorkflowMetricsRequest {
+  int64 start_time = 1; // Unix timestamp
+  int64 end_time = 2;   // Unix timestamp
+}
+
+message WorkflowMetrics {
+  int32 total_workflows = 1;
+  int32 running_workflows = 2;
+  int32 completed_workflows = 3;
+  int32 failed_workflows = 4;
+  double avg_execution_time_ms = 5;
+  map<string, int32> workflows_by_type = 6;
+}
+
+message GetWorkflowMetricsResponse {
+  WorkflowMetrics metrics = 1;
 }
