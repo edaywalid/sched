@@ -1,4 +1,7 @@
-.PHONY: help build up down logs restart clean test proto
+.PHONY: help build up down logs restart clean test proto migrate-up migrate-down migrate-new sqlc-gen
+
+# Default Postgres DSN for local migrations (mirrors docker-compose.yml).
+POSTGRES_DSN ?= postgres://sched:sched_password@localhost:5432/sched?sslmode=disable
 
 # Default target
 help:
@@ -14,6 +17,10 @@ help:
 	@echo "  make clean          - Remove all containers and volumes"
 	@echo "  make scale N=3      - Scale workers to N instances"
 	@echo "  make proto          - Generate protobuf files"
+	@echo "  make migrate-up     - Apply database migrations"
+	@echo "  make migrate-down   - Roll back the last migration"
+	@echo "  make migrate-new NAME=x - Create a new migration pair"
+	@echo "  make sqlc-gen       - Regenerate sqlc query bindings"
 	@echo "  make test           - Run tests"
 	@echo "  make test-workflow  - Start test workflows"
 	@echo "  make dev            - Run in development mode"
@@ -136,3 +143,22 @@ health:
 deps:
 	go mod download
 	go mod tidy
+
+# Apply all pending database migrations.
+migrate-up:
+	@echo "Applying migrations to $(POSTGRES_DSN)..."
+	migrate -path migrations -database "$(POSTGRES_DSN)" up
+
+# Roll back the most recent migration.
+migrate-down:
+	@echo "Rolling back one migration on $(POSTGRES_DSN)..."
+	migrate -path migrations -database "$(POSTGRES_DSN)" down 1
+
+# Scaffold a new migration pair. Usage: make migrate-new NAME=add_shards
+migrate-new:
+	@test -n "$(NAME)" || (echo "NAME is required, e.g. make migrate-new NAME=add_shards" && exit 1)
+	migrate create -ext sql -dir migrations -seq $(NAME)
+
+# Regenerate sqlc query bindings under internal/store/db/.
+sqlc-gen:
+	cd internal/store && sqlc generate
