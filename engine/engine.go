@@ -1,68 +1,39 @@
 package engine
 
 import (
-	"fmt"
+	"context"
 	"sync"
-	"time"
 
-	"github.com/edaywalid/sched/queue"
+	"github.com/edaywalid/sched/internal/store"
 )
 
+// Engine owns the durable workflow state (via Store) and the in-process
+// signal dispatch table. Task queueing lives in EngineServer (api.go);
+// Phase 2 will move task queueing to a durable Redis Streams queue.
 type Engine struct {
-	workflowTasks chan WorkflowTask
-	queue         queue.Queue
-	persistence   *PersistenceLayer
-	timerMgr      *TimerManager
-	signals       map[string]chan *Signal
-	signalsMu     sync.RWMutex
+	store     store.Store
+	timerMgr  *TimerManager
+	signals   map[string]chan *Signal
+	signalsMu sync.RWMutex
 }
 
-func NewEngine() *Engine {
-	persistence := NewPersistenceLayer()
+func NewEngine(s store.Store) *Engine {
 	return &Engine{
-		workflowTasks: make(chan WorkflowTask, 100),
-		queue:         queue.NewInMemoryQueue(), // Default to in-memory
-		persistence:   persistence,
-		timerMgr:      NewTimerManager(persistence),
-		signals:       make(map[string]chan *Signal),
+		store:    s,
+		timerMgr: NewTimerManager(s),
+		signals:  make(map[string]chan *Signal),
 	}
 }
 
-func NewEngineWithRedis(redisAddr string) (*Engine, error) {
-	q, err := queue.NewRedisQueue(redisAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Redis queue: %w", err)
-	}
+// Store returns the underlying persistence store.
+func (e *Engine) Store() store.Store { return e.store }
 
-	persistence := NewPersistenceLayer()
-	return &Engine{
-		workflowTasks: make(chan WorkflowTask, 100),
-		queue:         q,
-		persistence:   persistence,
-		timerMgr:      NewTimerManager(persistence),
-		signals:       make(map[string]chan *Signal),
-	}, nil
+// ListWorkflows returns all workflow executions, newest first.
+func (e *Engine) ListWorkflows(ctx context.Context, filter store.ListFilter) ([]*store.Workflow, error) {
+	return e.store.ListWorkflows(ctx, filter)
 }
 
-// StartWorkflow queues a workflow task for workers to pick up
-func (e *Engine) StartWorkflow(name string, input any) error {
-	workflowID := fmt.Sprintf("wf-%d", time.Now().UnixNano())
-
-	e.persistence.CreateWorkflowExecution(workflowID, name, input)
-
-	e.workflowTasks <- WorkflowTask{
-		WorkflowID: workflowID,
-		Name:       name,
-		Input:      input,
-	}
-
-	return nil
-}
-
-func (e *Engine) GetAllWorkflowExecutions() []*WorkflowExecution {
-	return e.persistence.GetAllExecutions()
-}
-
-func (e *Engine) GetWorkflowExecution(workflowID string) (*WorkflowExecution, error) {
-	return e.persistence.GetWorkflowExecution(workflowID)
+// GetWorkflow returns a single workflow execution by ID.
+func (e *Engine) GetWorkflow(ctx context.Context, workflowID string) (*store.Workflow, error) {
+	return e.store.GetWorkflow(ctx, workflowID)
 }
