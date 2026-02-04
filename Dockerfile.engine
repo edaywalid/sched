@@ -1,12 +1,12 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git protobuf-dev
 
 WORKDIR /app
 
-# Copy go mod files
+# Cache module downloads
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -21,13 +21,13 @@ FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+WORKDIR /app
 
-# Copy the binary from builder
 COPY --from=builder /app/engine .
+# Migrations are also shipped so an operator can run them from the engine
+# container if needed (see docker-compose `migrate` service).
+COPY --from=builder /app/migrations ./migrations
 
-# Expose ports
-EXPOSE 50051 8080
+EXPOSE 50051
 
-# Run the engine
 CMD ["./engine"]
