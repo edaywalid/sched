@@ -172,6 +172,70 @@ func (p *PostgresStore) ListWorkflows(ctx context.Context, filter ListFilter) ([
 	return out, nil
 }
 
+func (p *PostgresStore) InsertTimer(ctx context.Context, t Timer) error {
+	if err := p.queries.InsertTimer(ctx, db.InsertTimerParams{
+		TimerID:    t.TimerID,
+		WorkflowID: t.WorkflowID,
+		FireAt:     pgtype.Timestamptz{Time: t.FireAt, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("insert timer: %w", err)
+	}
+	return nil
+}
+
+// FetchDueTimers atomically claims and marks-fired up to limit timers
+// whose fire_at is past. The SELECT FOR UPDATE SKIP LOCKED inside a
+// transaction guarantees no two callers ever claim the same row.
+func (p *PostgresStore) FetchDueTimers(ctx context.Context, limit int) ([]Timer, error) {
+	if limit <= 0 {
+		limit = 64
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	q := p.queries.WithTx(tx)
+	rows, err := q.FetchDueTimers(ctx, int32(limit))
+	if err != nil {
+		return nil, fmt.Errorf("fetch due timers: %w", err)
+	}
+	out := make([]Timer, 0, len(rows))
+	for _, r := range rows {
+		if err := q.MarkTimerFired(ctx, r.TimerID); err != nil {
+			return nil, fmt.Errorf("mark fired %s: %w", r.TimerID, err)
+		}
+		out = append(out, timerFromRow(r))
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+	return out, nil
+}
+
+func (p *PostgresStore) ListPendingTimers(ctx context.Context) ([]Timer, error) {
+	rows, err := p.queries.GetPendingTimers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list pending timers: %w", err)
+	}
+	out := make([]Timer, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, timerFromRow(r))
+	}
+	return out, nil
+}
+
+func timerFromRow(r db.Timer) Timer {
+	return Timer{
+		TimerID:    r.TimerID,
+		WorkflowID: r.WorkflowID,
+		FireAt:     r.FireAt.Time,
+		Fired:      r.Fired,
+		CreatedAt:  r.CreatedAt.Time,
+	}
+}
+
 // querier is the subset of pgx that both *pgxpool.Pool and pgx.Tx satisfy
 // for read-only existence checks.
 type querier interface {

@@ -65,6 +65,17 @@ type Event struct {
 	Details    []byte
 }
 
+// Timer is a durable timer row. Phase 2 persists timers so the engine
+// can recover and fire them after a restart; Phase 3 wires the firing
+// callback back into workflow execution.
+type Timer struct {
+	TimerID    string
+	WorkflowID string
+	FireAt     time.Time
+	Fired      bool
+	CreatedAt  time.Time
+}
+
 // ListFilter narrows the set of workflows returned by ListWorkflows.
 // Empty fields mean "no filter".
 type ListFilter struct {
@@ -84,6 +95,16 @@ type Store interface {
 	GetWorkflow(ctx context.Context, workflowID string) (*Workflow, error)
 	GetHistory(ctx context.Context, workflowID string) ([]Event, error)
 	ListWorkflows(ctx context.Context, filter ListFilter) ([]*Workflow, error)
+
+	// InsertTimer persists a new pending timer.
+	InsertTimer(ctx context.Context, timer Timer) error
+	// FetchDueTimers claims up to limit timers whose fire_at is in the
+	// past and marks them fired in the same transaction. Returns the
+	// claimed timers.
+	FetchDueTimers(ctx context.Context, limit int) ([]Timer, error)
+	// ListPendingTimers returns all unfired timers, ordered by fire_at.
+	// Used on engine startup to repopulate the timer manager.
+	ListPendingTimers(ctx context.Context) ([]Timer, error)
 
 	Close() error
 }
