@@ -28,6 +28,9 @@ func NewEngine(s store.Store) *Engine {
 // Store returns the underlying persistence store.
 func (e *Engine) Store() store.Store { return e.store }
 
+// TimerManager exposes the engine's durable timer manager.
+func (e *Engine) TimerManager() *TimerManager { return e.timerMgr }
+
 // ListWorkflows returns all workflow executions, newest first.
 func (e *Engine) ListWorkflows(ctx context.Context, filter store.ListFilter) ([]*store.Workflow, error) {
 	return e.store.ListWorkflows(ctx, filter)
