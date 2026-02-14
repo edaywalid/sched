@@ -1,5 +1,51 @@
 # Changelog
 
+## [Unreleased] — Phase 2: Real Queue + Durable Timers
+
+**Outcome:** workers in separate processes share work via a real
+distributed queue, and timer state survives engine restarts. Workflow
+crash-resume during `Sleep` still waits on Phase 3 (replay).
+
+### Added
+- `queue.Queue.Ack` and `queue.Queue.Reclaim`, plus a `Message`
+  wrapper carrying an opaque ack token. `InMemoryQueue` keeps the
+  same interface with no-op ack/reclaim semantics.
+- `queue.RedisQueue`: Redis Streams backend with one stream per task
+  queue and a shared consumer group ("sched"). Includes
+  XPENDING+XCLAIM-based reclaim and a sensible default consumer name
+  derived from `<hostname>-<pid>`.
+- `store.Store.InsertTimer`, `FetchDueTimers` (FOR UPDATE SKIP LOCKED),
+  and `ListPendingTimers`, with implementations in both
+  `MemoryStore` and `PostgresStore`.
+- Engine startup recovers pending timer rows via
+  `Engine.TimerManager().RecoverPendingTimers`.
+- Engine reclaim loop scans in-process pending task maps every 15s
+  and re-enqueues entries past their 30s visibility timeout.
+
+### Changed
+- `EngineServer` now dispatches workflow tasks via
+  `tasks:wf:<queue>` and activity tasks via `tasks:act:<queue>` on
+  the configured queue backend. Completion handlers persist the
+  WorkflowCompleted / ActivityCompleted events and XACK the stream
+  entry inline; the old result-channel goroutine spawned by
+  `StartWorkflow` is gone.
+- `TimerManager.ScheduleTimer` now persists a `timers` row before
+  returning, and the firing loop polls Postgres instead of an
+  in-memory map. Callbacks are still local-only; recovered timers
+  emit `TimerFired` events but no in-process side-effect (Phase 3).
+- `cmd/engine` constructs the queue (`REDIS_ADDR` → RedisQueue,
+  otherwise InMemoryQueue) and recovers timers on boot.
+- `docker-compose.yml` drops the `worker` `container_name` so the
+  service can be scaled with `--scale worker=N`.
+
+### Known limitations (planned for Phase 3)
+- `SDKWorkflowContext.Sleep` still calls `time.Sleep` on the worker,
+  so a worker crash mid-sleep abandons the in-flight workflow. The
+  engine-side durable Sleep RPC requires the replay machinery.
+- Reclaim runs against the engine's in-process pending map; once
+  Phase 4 ships shard ownership, reclaim will use XPENDING across
+  the consumer group.
+
 ## [Unreleased] — Phase 1: Durable Single-Node
 
 **Outcome:** workflow state survives engine restarts. Foundation laid for
