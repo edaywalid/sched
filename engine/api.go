@@ -442,20 +442,30 @@ func (s *EngineServer) SignalWorkflow(ctx context.Context, req *proto.SignalWork
 		return nil, fmt.Errorf("record signal: %w", err)
 	}
 
-	// Phase 3 fully wires the signal channel into the workflow task
-	// loop. For now we only persist the event and deliver to any
-	// in-process listener if present.
-	s.engine.signalsMu.RLock()
-	signalCh, ok := s.engine.signals[req.WorkflowId]
-	s.engine.signalsMu.RUnlock()
-	if ok {
-		select {
-		case signalCh <- &Signal{Name: req.SignalName, Input: req.Input}:
-		default:
-		}
-	}
+	s.engine.DeliverSignal(req.WorkflowId, &Signal{
+		Name:  req.SignalName,
+		Input: req.Input,
+	})
 
 	return &proto.SignalWorkflowResponse{Success: true}, nil
+}
+
+func (s *EngineServer) WaitForSignal(ctx context.Context, req *proto.WaitForSignalRequest) (*proto.WaitForSignalResponse, error) {
+	timeout := time.Duration(req.TimeoutSeconds) * time.Second
+	sig, err := s.engine.WaitForSignal(ctx, req.WorkflowId, timeout)
+	if err != nil {
+		return nil, err
+	}
+	if sig == nil {
+		// Timed out — return an empty response so the worker can
+		// distinguish from a delivered signal and decide whether to
+		// poll again.
+		return &proto.WaitForSignalResponse{}, nil
+	}
+	return &proto.WaitForSignalResponse{
+		SignalName: sig.Name,
+		Input:      sig.Input,
+	}, nil
 }
 
 func (s *EngineServer) GetWorkflowStatus(ctx context.Context, req *proto.GetWorkflowStatusRequest) (*proto.GetWorkflowStatusResponse, error) {
