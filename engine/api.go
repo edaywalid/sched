@@ -259,6 +259,23 @@ func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.Comp
 	return &proto.CompleteWorkflowTaskResponse{Success: true}, nil
 }
 
+// RecordActivityHeartbeat resets the dequeue timestamp on the pending
+// activity task so long-running activities are not reclaimed mid-flight.
+// Returns cancel_requested=false until Phase 3 adds workflow-driven
+// cancellation.
+func (s *EngineServer) RecordActivityHeartbeat(ctx context.Context, req *proto.RecordActivityHeartbeatRequest) (*proto.RecordActivityHeartbeatResponse, error) {
+	s.mu.Lock()
+	pending, ok := s.pendingActTasks[req.TaskToken]
+	if ok {
+		pending.DequeuedAt = time.Now()
+	}
+	s.mu.Unlock()
+	if !ok {
+		return nil, fmt.Errorf("activity task not found: %s", req.TaskToken)
+	}
+	return &proto.RecordActivityHeartbeatResponse{Success: true}, nil
+}
+
 func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActivityTaskRequest) (*proto.PollActivityTaskResponse, error) {
 	timeout := time.Duration(req.TimeoutSeconds) * time.Second
 	if timeout == 0 {

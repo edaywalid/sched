@@ -15,6 +15,9 @@ service EngineService {
   
   rpc CompleteActivity(CompleteActivityRequest)
       returns (CompleteActivityResponse);
+
+  rpc RecordActivityHeartbeat(RecordActivityHeartbeatRequest)
+      returns (RecordActivityHeartbeatResponse);
   
   rpc PollActivityTask(PollActivityTaskRequest)
       returns (PollActivityTaskResponse);
@@ -57,6 +60,22 @@ message CompleteActivityRequest {
 
 message CompleteActivityResponse {
   bool success = 1;
+}
+
+message RecordActivityHeartbeatRequest {
+  string task_token = 1;
+  // Optional opaque details, surfaced to dashboard observers. Not used
+  // for decisions; only the reset-the-visibility-timeout side-effect
+  // happens server-side.
+  bytes details = 2;
+}
+
+message RecordActivityHeartbeatResponse {
+  bool success = 1;
+  // True when the activity has been cancelled and the worker should
+  // abort the current attempt. Phase 3 does not yet implement
+  // cancellation — always false.
+  bool cancel_requested = 2;
 }
 
 message PollActivityTaskRequest {
