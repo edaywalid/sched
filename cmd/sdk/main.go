@@ -61,6 +61,28 @@ func main() {
 		return nil, fmt.Errorf("intentional failure for input %v", input)
 	})
 
+	// LongActivity demonstrates heartbeats keeping a long-running task
+	// alive past the engine's visibility timeout.
+	client.RegisterActivity("LongActivity", func(actCtx sdk.ActivityContext, input any) (any, error) {
+		log.Printf("LongActivity start (token=%s, input=%v)", actCtx.TaskToken(), input)
+		for i := 0; i < 7; i++ {
+			time.Sleep(5 * time.Second)
+			if cancelled, err := actCtx.Heartbeat([]byte(fmt.Sprintf(`{"tick":%d}`, i))); err != nil {
+				log.Printf("LongActivity heartbeat error: %v", err)
+			} else if cancelled {
+				log.Printf("LongActivity cancelled")
+				return nil, fmt.Errorf("cancelled")
+			}
+			log.Printf("LongActivity tick %d", i)
+		}
+		return "long activity done", nil
+	})
+
+	client.RegisterWorkflow("LongDemo", func(ctx sdk.WorkflowContext, input any) (any, error) {
+		ctx.QueueActivity("LongActivity", input)
+		return "long demo done", nil
+	})
+
 	client.RegisterWorkflow("RetryDemo", func(ctx sdk.WorkflowContext, input any) (any, error) {
 		log.Println("RetryDemo workflow started!")
 		ctx.QueueActivity("AlwaysFail", input)
