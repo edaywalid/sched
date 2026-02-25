@@ -1,5 +1,51 @@
 # Changelog
 
+## [Unreleased] — Phase 3.1–3.3: Retries, Signals, Heartbeats
+
+**Outcome:** activities retry with exponential backoff on failure;
+signals are deliverable end-to-end via a new WaitForSignal RPC; long-
+running activities can heartbeat to extend their visibility timeout.
+
+### Added
+- `proto.EngineService.WaitForSignal` — blocking pull side of the
+  signal API. Workers call `WorkflowContext.WaitForSignal(timeout)`
+  to suspend until `SignalWorkflow` delivers a named signal.
+- `proto.EngineService.RecordActivityHeartbeat` — long-running
+  activities call `ActivityContext.Heartbeat(details)` periodically;
+  the engine resets the pending task's DequeuedAt timestamp so the
+  reclaim loop does not steal a still-running task.
+- `Engine.DeliverSignal` / `Engine.WaitForSignal` — per-workflow
+  signal queues with sleeping waiters, replacing the half-wired
+  `engine.signals` map.
+- `RetryPolicy.BackoffFor(attempt)` — geometric backoff helper with
+  defensive defaults and `MaximumInterval` clamp.
+- `EventActivityRetryScheduled` event type, surfaced in workflow
+  history with the upcoming attempt number and delay.
+- Worker demo workflows: `RetryDemo` (always-failing activity that
+  exhausts the default 3-attempt retry policy) and `SignalDemo`
+  (blocks on `WaitForSignal` until signalled), `LongDemo` (35-second
+  heartbeating activity).
+
+### Changed
+- `ScheduleActivity` stamps `attempt=1` plus the default
+  `RetryPolicy` onto every activity envelope. `CompleteActivity` on
+  failure writes `ActivityFailed` then schedules a durable timer
+  via `TimerManager` whose callback re-enqueues the activity at
+  `attempt+1`.
+- `ActivityContext` is no longer the empty interface; concrete SDK
+  context exposes `TaskToken()` and `Heartbeat(details)`.
+
+### Deferred to Phase 3.4 / Phase 4
+- Event-sourced workflow replay (workflow function as a pure
+  function of input + history). Without it, `Sleep` is still local
+  `time.Sleep` on the worker, so worker crashes mid-`Sleep` still
+  abandon in-flight workflows. The whole replay machinery is one
+  large coordinated change and lands in its own focused effort.
+- Workflow queries (`QueryWorkflow` RPC) and cooperative activity
+  cancellation. The `cancel_requested` field on the heartbeat
+  response is wire-ready but the engine never sets it.
+- Sharded engine (Phase 4) — requires replay first.
+
 ## [Unreleased] — Phase 2: Real Queue + Durable Timers
 
 **Outcome:** workers in separate processes share work via a real
