@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
@@ -173,7 +173,10 @@ func (s *EngineServer) StartWorkflow(ctx context.Context, req *proto.StartWorkfl
 		return nil, fmt.Errorf("enqueue workflow task: %w", err)
 	}
 
-	log.Printf("Queued workflow %s (ID: %s)", req.WorkflowName, workflowID)
+	slog.Info("queued workflow",
+		slog.String("workflow_name", req.WorkflowName),
+		slog.String("workflow_id", workflowID),
+		slog.String("run_id", runID))
 
 	return &proto.StartWorkflowResponse{
 		WorkflowId: workflowID,
@@ -253,7 +256,9 @@ func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.Comp
 	}
 
 	if err := s.queue.Ack(ctx, pending.QueueName, pending.AckToken); err != nil {
-		log.Printf("ack workflow task %s: %v", req.TaskToken, err)
+		slog.Warn("ack workflow task failed",
+			slog.String("task_token", req.TaskToken),
+			slog.Any("error", err))
 	}
 
 	return &proto.CompleteWorkflowTaskResponse{Success: true}, nil
@@ -360,7 +365,9 @@ func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.Complete
 	}
 
 	if err := s.queue.Ack(ctx, pending.QueueName, pending.AckToken); err != nil {
-		log.Printf("ack activity task %s: %v", req.TaskToken, err)
+		slog.Warn("ack activity task failed",
+			slog.String("task_token", req.TaskToken),
+			slog.Any("error", err))
 	}
 
 	return &proto.CompleteActivityResponse{Success: true}, nil
@@ -395,7 +402,9 @@ func (s *EngineServer) scheduleActivityRetry(ctx context.Context, pending *pendi
 		Policy:       pending.Policy,
 	})
 	if err != nil {
-		log.Printf("activity retry: marshal envelope: %v", err)
+		slog.Error("activity retry marshal envelope",
+			slog.String("workflow_id", pending.WorkflowID),
+			slog.Any("error", err))
 		return
 	}
 
@@ -403,12 +412,16 @@ func (s *EngineServer) scheduleActivityRetry(ctx context.Context, pending *pendi
 		retryCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := s.queue.Enqueue(retryCtx, queueName, envelope); err != nil {
-			log.Printf("activity retry: re-enqueue failed: %v", err)
+			slog.Error("activity retry re-enqueue failed",
+				slog.String("workflow_id", pending.WorkflowID),
+				slog.Any("error", err))
 		}
 	}
 
 	if _, err := s.engine.timerMgr.ScheduleTimer(ctx, pending.WorkflowID, delay, cb); err != nil {
-		log.Printf("activity retry: schedule timer failed: %v", err)
+		slog.Error("activity retry schedule timer",
+			slog.String("workflow_id", pending.WorkflowID),
+			slog.Any("error", err))
 	}
 }
 
@@ -637,21 +650,23 @@ func (s *EngineServer) reclaimExpired() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	for _, e := range workflows {
-		log.Printf("reclaim: re-enqueueing abandoned workflow task %s", e.taskToken)
+		slog.Warn("reclaim re-enqueueing abandoned workflow task",
+			slog.String("task_token", e.taskToken))
 		if err := s.queue.Ack(ctx, e.queueName, e.ackToken); err != nil {
-			log.Printf("reclaim: ack failed: %v", err)
+			slog.Error("reclaim ack failed", slog.Any("error", err))
 		}
 		if err := s.queue.Enqueue(ctx, e.queueName, e.envelope); err != nil {
-			log.Printf("reclaim: re-enqueue failed: %v", err)
+			slog.Error("reclaim re-enqueue failed", slog.Any("error", err))
 		}
 	}
 	for _, e := range activities {
-		log.Printf("reclaim: re-enqueueing abandoned activity task %s", e.taskToken)
+		slog.Warn("reclaim re-enqueueing abandoned activity task",
+			slog.String("task_token", e.taskToken))
 		if err := s.queue.Ack(ctx, e.queueName, e.ackToken); err != nil {
-			log.Printf("reclaim: ack failed: %v", err)
+			slog.Error("reclaim ack failed", slog.Any("error", err))
 		}
 		if err := s.queue.Enqueue(ctx, e.queueName, e.envelope); err != nil {
-			log.Printf("reclaim: re-enqueue failed: %v", err)
+			slog.Error("reclaim re-enqueue failed", slog.Any("error", err))
 		}
 	}
 }
@@ -683,6 +698,6 @@ func StartGRPCServer(engine *Engine, q queue.Queue, address string) error {
 	engineServer := NewEngineServer(engine, q)
 	proto.RegisterEngineServiceServer(grpcServer, engineServer)
 
-	log.Printf("Engine gRPC server listening on %s", address)
+	slog.Info("engine gRPC server listening", slog.String("addr", address))
 	return grpcServer.Serve(lis)
 }

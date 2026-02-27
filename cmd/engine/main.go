@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/edaywalid/sched/engine"
+	"github.com/edaywalid/sched/internal/observability"
 	"github.com/edaywalid/sched/internal/store"
 	"github.com/edaywalid/sched/queue"
 	"github.com/joho/godotenv"
@@ -14,6 +15,7 @@ import (
 
 func main() {
 	_ = godotenv.Load()
+	logger := observability.NewLogger("engine")
 
 	enginePort := getEnv("ENGINE_PORT", "50051")
 	dsn := getEnv("SCHED_POSTGRES_DSN", os.Getenv("POSTGRES_DSN"))
@@ -21,44 +23,49 @@ func main() {
 
 	s, err := openStore(dsn)
 	if err != nil {
-		log.Fatalf("open store: %v", err)
+		logger.Error("open store", slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer s.Close()
 
 	q, err := openQueue(redisAddr)
 	if err != nil {
-		log.Fatalf("open queue: %v", err)
+		logger.Error("open queue", slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer q.Close()
 
 	e := engine.NewEngine(s)
 
-	if _, err := e.TimerManager().RecoverPendingTimers(context.Background()); err != nil {
-		log.Printf("recover pending timers: %v (continuing)", err)
+	if n, err := e.TimerManager().RecoverPendingTimers(context.Background()); err != nil {
+		logger.Warn("recover pending timers", slog.Any("error", err))
+	} else if n > 0 {
+		logger.Info("recovered pending timers", slog.Int("count", n))
 	}
 
 	engineAddr := fmt.Sprintf(":%s", enginePort)
-	log.Printf("Starting Engine gRPC server on %s", engineAddr)
+	logger.Info("starting gRPC server", slog.String("addr", engineAddr))
 	if err := engine.StartGRPCServer(e, q, engineAddr); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		logger.Error("gRPC server exited", slog.Any("error", err))
+		os.Exit(1)
 	}
 }
 
 func openStore(dsn string) (store.Store, error) {
 	if dsn == "" {
-		log.Println("SCHED_POSTGRES_DSN not set — using in-memory store (state will NOT survive restart)")
+		slog.Warn("SCHED_POSTGRES_DSN not set, using in-memory store (state will NOT survive restart)")
 		return store.NewMemoryStore(), nil
 	}
-	log.Printf("Opening Postgres store")
+	slog.Info("opening Postgres store")
 	return store.NewPostgresStore(context.Background(), dsn)
 }
 
 func openQueue(redisAddr string) (queue.Queue, error) {
 	if redisAddr == "" {
-		log.Println("REDIS_ADDR not set — using in-memory queue (single-process only)")
+		slog.Warn("REDIS_ADDR not set, using in-memory queue (single-process only)")
 		return queue.NewInMemoryQueue(), nil
 	}
-	log.Printf("Opening Redis Streams queue at %s", redisAddr)
+	slog.Info("opening Redis Streams queue", slog.String("addr", redisAddr))
 	return queue.NewRedisQueue(context.Background(), queue.RedisOptions{Addr: redisAddr})
 }
 
