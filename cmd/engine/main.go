@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 
 	"github.com/edaywalid/sched/engine"
 	"github.com/edaywalid/sched/internal/observability"
@@ -36,6 +37,7 @@ func main() {
 	defer q.Close()
 
 	e := engine.NewEngine(s)
+	metrics := observability.NewMetrics()
 
 	if n, err := e.TimerManager().RecoverPendingTimers(context.Background()); err != nil {
 		logger.Warn("recover pending timers", slog.Any("error", err))
@@ -43,9 +45,19 @@ func main() {
 		logger.Info("recovered pending timers", slog.Int("count", n))
 	}
 
+	metricsPort, _ := strconv.Atoi(getEnv("SCHED_METRICS_PORT", "9090"))
+	shutdownMetrics, metricsErr := observability.StartMetricsServer(metricsPort)
+	defer shutdownMetrics()
+	go func() {
+		if err, ok := <-metricsErr; ok && err != nil {
+			logger.Error("metrics server", slog.Any("error", err))
+		}
+	}()
+	logger.Info("metrics server listening", slog.Int("port", metricsPort))
+
 	engineAddr := fmt.Sprintf(":%s", enginePort)
 	logger.Info("starting gRPC server", slog.String("addr", engineAddr))
-	if err := engine.StartGRPCServer(e, q, engineAddr); err != nil {
+	if err := engine.StartGRPCServer(e, q, metrics, engineAddr); err != nil {
 		logger.Error("gRPC server exited", slog.Any("error", err))
 		os.Exit(1)
 	}
