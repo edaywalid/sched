@@ -62,10 +62,13 @@ services:
     container_name: sched-engine
     ports:
       - "50051:50051"
+      - "9090:9090"   # Prometheus /metrics
     environment:
       - ENGINE_PORT=50051
       - SCHED_POSTGRES_DSN=postgres://sched:sched_password@postgres:5432/sched?sslmode=disable
       - REDIS_ADDR=redis:6379
+      - SCHED_METRICS_PORT=9090
+      - SCHED_LOG_FORMAT=json
     depends_on:
       redis:
         condition: service_healthy
