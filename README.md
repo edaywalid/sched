@@ -6,20 +6,22 @@ Currently shipping toward production-grade per the
 
 ## Status
 
-| Capability                          | Today (v2 / through Phase 3.3)                        |
-| ----------------------------------- | ----------------------------------------------------- |
-| Workflow + activity execution       | ✅ Single engine, gRPC SDK                            |
-| Workflow state persistence          | ✅ PostgreSQL (pgx/v5 + sqlc, event-sourced history)  |
-| Web dashboard                       | ✅ templ + htmx, served by the dashboard service      |
-| Distributed task queue              | ✅ Redis Streams with consumer groups + reclaim       |
-| Durable timer rows (survive restart)| ✅ Persisted in Postgres, recovered on engine boot    |
-| Activity retries (exponential)      | ✅ `RetryPolicy.BackoffFor` + durable retry timers    |
-| Signals end-to-end (push + wait)    | ✅ `SignalWorkflow` + `WaitForSignal`                 |
-| Activity heartbeats                 | ✅ `RecordActivityHeartbeat` extends visibility       |
-| `Sleep` survives worker crash       | ⏳ Phase 3.4 — needs event-sourced replay             |
-| Workflow queries                    | ⏳ Phase 3.4                                          |
-| Sharded engine for HA               | ⏳ Phase 4                                            |
-| Structured logs / metrics / tracing | ⏳ Phase 5                                            |
+| Capability                            | State    | Notes                                                   |
+| ------------------------------------- | -------- | ------------------------------------------------------- |
+| Workflow and activity execution       | shipped  | Single engine, gRPC SDK                                 |
+| Workflow state persistence            | shipped  | PostgreSQL via pgx/v5 and sqlc, event-sourced history   |
+| Web dashboard                         | shipped  | templ and htmx, served by the dashboard service         |
+| Distributed task queue                | shipped  | Redis Streams, consumer groups, reclaim                 |
+| Durable timer rows                    | shipped  | Persisted in Postgres, recovered on engine boot         |
+| Activity retries (exponential)        | shipped  | `RetryPolicy.BackoffFor` plus durable retry timers      |
+| Signals end-to-end                    | shipped  | `SignalWorkflow` push and `WaitForSignal` pull          |
+| Activity heartbeats                   | shipped  | `RecordActivityHeartbeat` extends visibility timeout    |
+| Structured logging (slog)             | shipped  | JSON or text, level via env                             |
+| Prometheus metrics                    | shipped  | `/metrics` on the engine                                |
+| `Sleep` survives worker crash         | planned  | Phase 3.4. Needs event-sourced replay first.            |
+| Workflow queries                      | planned  | Phase 3.4                                               |
+| Sharded engine for HA                 | planned  | Phase 4                                                 |
+| OpenTelemetry tracing, lint, CI       | planned  | Phase 5.3 onward                                        |
 
 ## Architecture
 
@@ -85,8 +87,8 @@ make migrate-down                 # roll back the last migration
 make migrate-new NAME=add_shards  # scaffold a new pair
 ```
 
-To run the engine without Docker leave `SCHED_POSTGRES_DSN` unset — the
-engine falls back to an in-memory store (state lost on restart).
+To run the engine without Docker, leave `SCHED_POSTGRES_DSN` unset. The
+engine falls back to an in-memory store and state is lost on restart.
 
 ### Local Development
 
