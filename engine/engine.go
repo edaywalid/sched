@@ -1,3 +1,6 @@
+// Package engine owns the workflow orchestrator: durable state via
+// store.Store, task dispatch via queue.Queue, durable timers, and the
+// gRPC handlers that workers and clients talk to.
 package engine
 
 import (

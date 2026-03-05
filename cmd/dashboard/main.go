@@ -38,7 +38,7 @@ func NewDashboardServer(engineAddress string) (*DashboardServer, error) {
 
 func (s *DashboardServer) Close() {
 	if s.conn != nil {
-		s.conn.Close()
+		_ = s.conn.Close()
 	}
 }
 
@@ -63,7 +63,7 @@ func (s *DashboardServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	// Render with templ
 	component := templates.Index(metricsResp.Metrics, workflowsResp.Workflows)
-	component.Render(ctx, w)
+	_ = component.Render(ctx, w)
 }
 
 func (s *DashboardServer) handleMetricsHTML(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +77,7 @@ func (s *DashboardServer) handleMetricsHTML(w http.ResponseWriter, r *http.Reque
 	}
 
 	component := templates.MetricsGrid(metricsResp.Metrics)
-	component.Render(ctx, w)
+	_ = component.Render(ctx, w)
 }
 
 func (s *DashboardServer) handleWorkflowsHTML(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +95,7 @@ func (s *DashboardServer) handleWorkflowsHTML(w http.ResponseWriter, r *http.Req
 	}
 
 	component := templates.WorkflowList(workflowsResp.Workflows)
-	component.Render(ctx, w)
+	_ = component.Render(ctx, w)
 }
 
 func (s *DashboardServer) handleWorkflowDetail(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +117,7 @@ func (s *DashboardServer) handleWorkflowDetail(w http.ResponseWriter, r *http.Re
 	}
 
 	component := templates.WorkflowDetail(detailsResp)
-	component.Render(ctx, w)
+	_ = component.Render(ctx, w)
 }
 
 func (s *DashboardServer) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {

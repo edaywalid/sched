@@ -1,3 +1,6 @@
+// Package sdk is the worker-side client for the sched workflow engine.
+// It registers workflow and activity functions, polls the engine for
+// work, and reports results back over gRPC.
 package sdk
 
 import (
