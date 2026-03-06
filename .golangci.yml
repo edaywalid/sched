@@ -1,0 +1,71 @@
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.25"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gocritic
+    - revive
+    - misspell
+  settings:
+    errcheck:
+      check-blank: false
+      exclude-functions:
+        - (io.Closer).Close
+        - (net/http.ResponseWriter).Write
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*github.com/jackc/pgx/v5.Conn).Close
+        - (github.com/jackc/pgx/v5.Tx).Rollback
+        - (*github.com/a-h/templ.ComponentScript)
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+        - exitAfterDefer
+    revive:
+      severity: warning
+      rules:
+        - name: exported
+          severity: warning
+          disabled: true
+        - name: var-naming
+        - name: errorf
+        - name: error-return
+        - name: error-naming
+        - name: unused-parameter
+          disabled: true
+        - name: context-as-argument
+        - name: indent-error-flow
+    staticcheck:
+      checks: ["all", "-SA1019"]   # grpc.Dial deprecation tracked separately
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gocritic
+      - path: internal/store/db/
+        linters:
+          - revive
+          - staticcheck
+          - gocritic
+          - unused
+      - path: cmd/dashboard/templates/
+        linters:
+          - errcheck
+          - gocritic
+          - revive
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
