@@ -52,7 +52,23 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
-### Deferred to Phase 3.4 and Phase 4
+### Added (Phase 5.3)
+
+- `.golangci.yml` enabling errcheck, govet, ineffassign,
+  staticcheck, unused, gocritic, revive, and misspell. Pragmatic
+  exclusions for sqlc generated code and the templ generated
+  dashboard renderer.
+- `make lint` target that auto installs `golangci-lint v2.7.2` on
+  first use.
+- `.github/workflows/ci.yml` running build, vet, race tests, and
+  golangci-lint on push and PR. Postgres 16 and Redis 7 service
+  containers let the integration tests in `internal/store` and
+  `queue` run for real instead of skipping.
+- `.github/dependabot.yml` for weekly Go module, Docker image,
+  and GitHub Actions updates. Grouped PRs for OTel, Prometheus,
+  and gRPC ecosystems.
+
+### Deferred to Phase 3.4, Phase 4, Phase 5.4
 
 - Event sourced workflow replay (workflow function as a pure
   function of input plus history). Without it, `Sleep` is still a
@@ -63,6 +79,8 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   cancellation. The `cancel_requested` field on the heartbeat
   response is wire ready, but the engine never sets it yet.
 - Sharded engine (Phase 4). Requires replay first.
+- OpenTelemetry tracing across engine, worker, and dashboard
+  (Phase 5.4).
 
 ## [Unreleased] Phase 2: Real Queue and Durable Timers
 
