@@ -14,6 +14,7 @@ import (
 	"github.com/edaywalid/sched/proto"
 	"github.com/edaywalid/sched/queue"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 )
 
@@ -733,7 +734,9 @@ func StartGRPCServer(engine *Engine, q queue.Queue, m *observability.Metrics, ad
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
 	engineServer := NewEngineServer(engine, q, m)
 	proto.RegisterEngineServiceServer(grpcServer, engineServer)
 

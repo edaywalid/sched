@@ -18,6 +18,12 @@ func main() {
 	_ = godotenv.Load()
 	logger := observability.NewLogger("engine")
 
+	shutdownTracing, err := observability.InitTracing(context.Background(), "engine")
+	if err != nil {
+		logger.Warn("init tracing", slog.Any("error", err))
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
+
 	enginePort := getEnv("ENGINE_PORT", "50051")
 	dsn := getEnv("SCHED_POSTGRES_DSN", os.Getenv("POSTGRES_DSN"))
 	redisAddr := getEnv("REDIS_ADDR", "")
