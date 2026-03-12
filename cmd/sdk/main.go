@@ -7,11 +7,18 @@ import (
 	"os"
 	"time"
 
+	"github.com/edaywalid/sched/internal/observability"
 	"github.com/edaywalid/sched/sdk"
 )
 
 func main() {
-	  
+	observability.NewLogger("worker")
+	shutdownTracing, err := observability.InitTracing(context.Background(), "worker")
+	if err != nil {
+		log.Printf("init tracing: %v (continuing without tracer)", err)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
+
 	engineAddress := getEnv("ENGINE_ADDRESS", "localhost:50051")
 	taskQueue := getEnv("TASK_QUEUE", "default")
 

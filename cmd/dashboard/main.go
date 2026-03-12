@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/edaywalid/sched/cmd/dashboard/templates"
+	"github.com/edaywalid/sched/internal/observability"
 	"github.com/edaywalid/sched/proto"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -22,8 +24,13 @@ type DashboardServer struct {
 }
 
 func NewDashboardServer(engineAddress string) (*DashboardServer, error) {
-	// Connect to engine via gRPC
-	conn, err := grpc.Dial(engineAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Connect to engine via gRPC. The otelgrpc client handler propagates
+	// trace context so a span started in the dashboard request handler
+	// shows up as the parent of the engine-side span.
+	conn, err := grpc.NewClient(engineAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to engine: %w", err)
 	}
@@ -200,6 +207,14 @@ func (s *DashboardServer) Start(address string) error {
 }
 
 func main() {
+	observability.NewLogger("dashboard")
+
+	shutdownTracing, err := observability.InitTracing(context.Background(), "dashboard")
+	if err != nil {
+		log.Printf("init tracing: %v (continuing without tracer)", err)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
+
 	engineAddress := getEnv("ENGINE_ADDRESS", "localhost:50051")
 	dashboardPort := getEnv("DASHBOARD_PORT", "8080")
 

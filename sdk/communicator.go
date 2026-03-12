@@ -10,7 +10,12 @@ import (
 	"log"
 	"time"
 
+	"github.com/edaywalid/sched/internal/observability"
 	"github.com/edaywalid/sched/proto"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -26,7 +31,10 @@ type Client struct {
 
   
 func NewClient(engineAddress string, taskQueue string) (*Client, error) {
-	conn, err := grpc.NewClient(engineAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(engineAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to engine: %w", err)
 	}
@@ -200,13 +208,26 @@ func (c *Client) pollAndExecuteWorkflow(ctx context.Context) error {
 	}
 
 	  
-	wfCtx := &SDKWorkflowContext{
+	tracer := otel.Tracer(observability.TracerName)
+	wfCtx, wfSpan := tracer.Start(ctx, "workflow."+resp.WorkflowName)
+	wfSpan.SetAttributes(
+		attribute.String("workflow.id", resp.WorkflowId),
+		attribute.String("workflow.run_id", resp.RunId),
+		attribute.String("workflow.name", resp.WorkflowName),
+	)
+
+	wfRunCtx := &SDKWorkflowContext{
 		workflowID: resp.WorkflowId,
 		client:     c,
-		ctx:        ctx,
+		ctx:        wfCtx,
 	}
 
-	result, err := workflow(wfCtx, input)
+	result, err := workflow(wfRunCtx, input)
+	if err != nil {
+		wfSpan.RecordError(err)
+		wfSpan.SetStatus(codes.Error, err.Error())
+	}
+	wfSpan.End()
 
 	  
 	var resultBytes []byte
@@ -267,12 +288,25 @@ func (c *Client) pollAndExecuteActivity(ctx context.Context) error {
 		}
 	}
 
+	tracer := otel.Tracer(observability.TracerName)
+	actSpanCtx, actSpan := tracer.Start(ctx, "activity."+resp.ActivityName)
+	actSpan.SetAttributes(
+		attribute.String("workflow.id", resp.WorkflowId),
+		attribute.String("activity.name", resp.ActivityName),
+		attribute.String("activity.task_token", resp.TaskToken),
+	)
+
 	actCtx := &sdkActivityContext{
-		ctx:       ctx,
+		ctx:       actSpanCtx,
 		client:    c.client,
 		taskToken: resp.TaskToken,
 	}
 	result, err := activity(actCtx, input)
+	if err != nil {
+		actSpan.RecordError(err)
+		actSpan.SetStatus(codes.Error, err.Error())
+	}
+	actSpan.End()
 
 	var resultBytes []byte
 	var errStr string
