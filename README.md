@@ -22,7 +22,7 @@ Currently shipping toward production-grade per the
 | `Sleep` survives worker crash         | planned  | Phase 3.4. Needs event-sourced replay first.            |
 | Workflow queries                      | planned  | Phase 3.4                                               |
 | Sharded engine for HA                 | planned  | Phase 4                                                 |
-| OpenTelemetry tracing                 | planned  | Phase 5.4                                               |
+| OpenTelemetry tracing                 | shipped  | OTLP/gRPC exporter; otelgrpc interceptors on engine, worker, dashboard; `docker compose --profile tracing up` brings Jaeger up on `:16686` |
 
 ## Architecture
 

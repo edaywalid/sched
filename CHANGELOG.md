@@ -52,6 +52,24 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
+### Added (Phase 5.4)
+
+- `internal/observability/tracing.go`. `InitTracing` installs the
+  global OpenTelemetry tracer provider with the OTLP/gRPC exporter
+  when `SCHED_OTLP_ENDPOINT` is set, or the noop tracer when it is
+  not. The W3C `TraceContext` and `Baggage` propagators are set
+  globally so trace context flows across processes.
+- `otelgrpc` stats handler on the engine gRPC server, the SDK gRPC
+  client, and the dashboard gRPC client. RPC spans link the three
+  services automatically once a span is in flight.
+- Explicit `workflow.<name>` and `activity.<name>` spans in the SDK
+  worker loop, tagged with `workflow.id`, `workflow.run_id`,
+  `activity.name`, and `activity.task_token`. Errors get
+  `SetStatus(Error, msg)` and `RecordError`.
+- `jaeger` service in `docker-compose.yml` behind a `tracing`
+  profile. Run with `SCHED_OTLP_ENDPOINT=jaeger:4317 docker compose
+  --profile tracing up -d` and open `http://localhost:16686`.
+
 ### Added (Phase 5.3)
 
 - `.golangci.yml` enabling errcheck, govet, ineffassign,
