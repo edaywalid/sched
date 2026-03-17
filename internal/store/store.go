@@ -23,6 +23,7 @@ const (
 	StatusCompleted WorkflowStatus = "COMPLETED"
 	StatusFailed    WorkflowStatus = "FAILED"
 	StatusTimedOut  WorkflowStatus = "TIMED_OUT"
+	StatusCanceled  WorkflowStatus = "CANCELED"
 )
 
 const (
@@ -36,6 +37,9 @@ const (
 	EventTimerScheduled         = "TimerScheduled"
 	EventTimerFired             = "TimerFired"
 	EventSignalReceived         = "SignalReceived"
+	EventWorkflowTimedOut       = "WorkflowTimedOut"
+	EventWorkflowCancelRequested = "WorkflowCancelRequested"
+	EventWorkflowCanceled       = "WorkflowCanceled"
 )
 
 // Workflow is the durable record of a single workflow execution.

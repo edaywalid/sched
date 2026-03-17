@@ -16,4 +16,7 @@ const (
 	EventTypeTimerScheduled         = store.EventTimerScheduled
 	EventTypeTimerFired             = store.EventTimerFired
 	EventTypeSignalReceived         = store.EventSignalReceived
+	EventTypeWorkflowTimedOut       = store.EventWorkflowTimedOut
+	EventTypeWorkflowCancelRequested = store.EventWorkflowCancelRequested
+	EventTypeWorkflowCanceled       = store.EventWorkflowCanceled
 )
