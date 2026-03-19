@@ -177,6 +177,11 @@ func (s *EngineServer) StartWorkflow(ctx context.Context, req *proto.StartWorkfl
 		return nil, fmt.Errorf("enqueue workflow task: %w", err)
 	}
 
+	if req.WorkflowExecutionTimeoutSeconds > 0 {
+		timeout := time.Duration(req.WorkflowExecutionTimeoutSeconds) * time.Second
+		s.scheduleExecutionTimeout(ctx, workflowID, timeout)
+	}
+
 	if s.metrics != nil {
 		s.metrics.WorkflowsStarted.Inc()
 	}
@@ -285,8 +290,8 @@ func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.Comp
 
 // RecordActivityHeartbeat resets the dequeue timestamp on the pending
 // activity task so long-running activities are not reclaimed mid-flight.
-// Returns cancel_requested=false until Phase 3 adds workflow-driven
-// cancellation.
+// The returned cancel_requested is true when CancelWorkflow has marked
+// the parent workflow; cooperative activities should return promptly.
 func (s *EngineServer) RecordActivityHeartbeat(ctx context.Context, req *proto.RecordActivityHeartbeatRequest) (*proto.RecordActivityHeartbeatResponse, error) {
 	s.mu.Lock()
 	pending, ok := s.pendingActTasks[req.TaskToken]
@@ -297,7 +302,77 @@ func (s *EngineServer) RecordActivityHeartbeat(ctx context.Context, req *proto.R
 	if !ok {
 		return nil, fmt.Errorf("activity task not found: %s", req.TaskToken)
 	}
-	return &proto.RecordActivityHeartbeatResponse{Success: true}, nil
+	return &proto.RecordActivityHeartbeatResponse{
+		Success:         true,
+		CancelRequested: s.engine.IsCancelRequested(pending.WorkflowID),
+	}, nil
+}
+
+// CancelWorkflow marks a running workflow for cancellation. Subsequent
+// activity heartbeats see cancel_requested=true; long-running activities
+// can read the flag from ActivityContext.Heartbeat and return early. The
+// engine writes a WorkflowCancelRequested event immediately. If the
+// workflow is still running when the workflow task next completes, the
+// final state is recorded as CANCELED.
+func (s *EngineServer) CancelWorkflow(ctx context.Context, req *proto.CancelWorkflowRequest) (*proto.CancelWorkflowResponse, error) {
+	wf, err := s.engine.store.GetWorkflow(ctx, req.WorkflowId)
+	if err != nil {
+		return nil, fmt.Errorf("lookup workflow: %w", err)
+	}
+	if wf.Status != store.StatusRunning {
+		// Cancel is a no-op against a terminal workflow.
+		return &proto.CancelWorkflowResponse{Success: true}, nil
+	}
+
+	s.engine.MarkCancelRequested(req.WorkflowId)
+	details, _ := json.Marshal(map[string]any{"reason": req.Reason})
+	if err := s.engine.store.AppendEvent(ctx, store.Event{
+		WorkflowID: req.WorkflowId,
+		Type:       EventTypeWorkflowCancelRequested,
+		Details:    details,
+	}); err != nil {
+		slog.Warn("append cancel-requested event", slog.Any("error", err))
+	}
+	return &proto.CancelWorkflowResponse{Success: true}, nil
+}
+
+// scheduleExecutionTimeout arms a durable timer that fires after
+// timeout. When the timer fires, if the workflow is still RUNNING the
+// engine writes a WorkflowTimedOut event and marks the row TIMED_OUT.
+// If the workflow already reached a terminal state the timer is a
+// no-op so this is safe even when the workflow finishes promptly.
+func (s *EngineServer) scheduleExecutionTimeout(ctx context.Context, workflowID string, timeout time.Duration) {
+	cb := func() {
+		bg, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		wf, err := s.engine.store.GetWorkflow(bg, workflowID)
+		if err != nil {
+			slog.Warn("execution timeout lookup",
+				slog.String("workflow_id", workflowID),
+				slog.Any("error", err))
+			return
+		}
+		if wf.Status != store.StatusRunning {
+			return
+		}
+		details, _ := json.Marshal(map[string]any{
+			"timeout_seconds": int(timeout.Seconds()),
+		})
+		_ = s.engine.store.AppendEvent(bg, store.Event{
+			WorkflowID: workflowID,
+			Type:       EventTypeWorkflowTimedOut,
+			Details:    details,
+		})
+		_ = s.engine.store.CompleteWorkflow(bg, workflowID, store.StatusTimedOut, nil, "workflow execution timeout")
+		if s.metrics != nil {
+			s.metrics.WorkflowsCompleted.WithLabelValues("timed_out").Inc()
+		}
+	}
+	if _, err := s.engine.timerMgr.ScheduleTimer(ctx, workflowID, timeout, cb); err != nil {
+		slog.Error("schedule execution timeout",
+			slog.String("workflow_id", workflowID),
+			slog.Any("error", err))
+	}
 }
 
 func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActivityTaskRequest) (*proto.PollActivityTaskResponse, error) {

@@ -19,6 +19,10 @@ import (
 // handed off directly; otherwise it is buffered until a waiter
 // arrives. Phase 3.3 will replace the in-process queues with a
 // history-driven replay model.
+//
+// cancelRequested is a per-workflow flag set by CancelWorkflow and
+// surfaced through RecordActivityHeartbeat so long-running activities
+// can bail out cooperatively.
 type Engine struct {
 	store    store.Store
 	timerMgr *TimerManager
@@ -26,15 +30,37 @@ type Engine struct {
 	signalsMu     sync.Mutex
 	signalQueues  map[string][]*Signal      // workflow_id -> buffered signals
 	signalWaiters map[string][]chan *Signal // workflow_id -> waiters
+
+	cancelMu        sync.RWMutex
+	cancelRequested map[string]struct{} // workflow_id set
 }
 
 func NewEngine(s store.Store) *Engine {
 	return &Engine{
-		store:         s,
-		timerMgr:      NewTimerManager(s),
-		signalQueues:  make(map[string][]*Signal),
-		signalWaiters: make(map[string][]chan *Signal),
+		store:           s,
+		timerMgr:        NewTimerManager(s),
+		signalQueues:    make(map[string][]*Signal),
+		signalWaiters:   make(map[string][]chan *Signal),
+		cancelRequested: make(map[string]struct{}),
 	}
+}
+
+// MarkCancelRequested records that a workflow has been asked to cancel.
+// Subsequent RecordActivityHeartbeat calls for any running activity in
+// this workflow return cancel_requested=true so the worker can bail.
+func (e *Engine) MarkCancelRequested(workflowID string) {
+	e.cancelMu.Lock()
+	defer e.cancelMu.Unlock()
+	e.cancelRequested[workflowID] = struct{}{}
+}
+
+// IsCancelRequested reports whether MarkCancelRequested has been called
+// for this workflow.
+func (e *Engine) IsCancelRequested(workflowID string) bool {
+	e.cancelMu.RLock()
+	defer e.cancelMu.RUnlock()
+	_, ok := e.cancelRequested[workflowID]
+	return ok
 }
 
 // DeliverSignal hands the signal to the next waiter for the workflow
