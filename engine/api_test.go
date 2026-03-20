@@ -334,6 +334,101 @@ func pollActivityWithBackoff(ctx context.Context, c proto.EngineServiceClient, t
 	return nil, context.DeadlineExceeded
 }
 
+// TestWorkflowExecutionTimeout verifies that a workflow started with
+// workflow_execution_timeout_seconds > 0 is marked TIMED_OUT if it has
+// not reached a terminal state when the timer fires.
+func TestWorkflowExecutionTimeout(t *testing.T) {
+	client, srv, teardown := newTestServer(t)
+	defer teardown()
+	ctx := context.Background()
+
+	startResp, err := client.StartWorkflow(ctx, &proto.StartWorkflowRequest{
+		WorkflowName:                    "Slow",
+		WorkflowExecutionTimeoutSeconds: 1,
+	})
+	if err != nil {
+		t.Fatalf("StartWorkflow: %v", err)
+	}
+
+	// Do NOT complete the workflow task. Wait past the timeout.
+	deadline := time.Now().Add(3 * time.Second)
+	var wf *store.Workflow
+	for time.Now().Before(deadline) {
+		wf, err = srv.engine.store.GetWorkflow(ctx, startResp.WorkflowId)
+		if err != nil {
+			t.Fatalf("GetWorkflow: %v", err)
+		}
+		if wf.Status == store.StatusTimedOut {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if wf.Status != store.StatusTimedOut {
+		t.Fatalf("status = %q, want TIMED_OUT", wf.Status)
+	}
+
+	hist, _ := srv.engine.store.GetHistory(ctx, startResp.WorkflowId)
+	if !containsEvent(hist, EventTypeWorkflowTimedOut) {
+		t.Errorf("history missing WorkflowTimedOut: %v", eventTypes(hist))
+	}
+}
+
+// TestCancelWorkflow verifies CancelWorkflow flips the in-process cancel
+// flag and that subsequent activity heartbeats see cancel_requested=true.
+func TestCancelWorkflow(t *testing.T) {
+	client, srv, teardown := newTestServer(t)
+	defer teardown()
+	ctx := context.Background()
+
+	startResp, _ := client.StartWorkflow(ctx, &proto.StartWorkflowRequest{WorkflowName: "Cancellable"})
+
+	// Drain workflow task and schedule an activity. We do NOT complete
+	// the workflow task because doing so would mark the workflow
+	// COMPLETED, and CancelWorkflow only acts on RUNNING workflows.
+	// The workflow stays RUNNING while we exercise the cancel path.
+	wfPoll, _ := client.PollWorkflowTask(ctx, &proto.PollWorkflowTaskRequest{TaskQueue: "default", TimeoutSeconds: 5})
+	if _, err := client.ScheduleActivity(ctx, &proto.ScheduleActivityRequest{
+		WorkflowId:   wfPoll.WorkflowId,
+		ActivityName: "Slow",
+	}); err != nil {
+		t.Fatalf("ScheduleActivity: %v", err)
+	}
+	actPoll, _ := client.PollActivityTask(ctx, &proto.PollActivityTaskRequest{TaskQueue: "default", TimeoutSeconds: 5})
+
+	// Cancel the workflow while the activity is in flight.
+	if _, err := client.CancelWorkflow(ctx, &proto.CancelWorkflowRequest{
+		WorkflowId: startResp.WorkflowId,
+		Reason:     "user requested",
+	}); err != nil {
+		t.Fatalf("CancelWorkflow: %v", err)
+	}
+
+	// Heartbeat should now report cancel_requested=true.
+	hb, err := client.RecordActivityHeartbeat(ctx, &proto.RecordActivityHeartbeatRequest{
+		TaskToken: actPoll.TaskToken,
+	})
+	if err != nil {
+		t.Fatalf("RecordActivityHeartbeat: %v", err)
+	}
+	if !hb.CancelRequested {
+		t.Errorf("CancelRequested = false; want true after CancelWorkflow")
+	}
+
+	hist, _ := srv.engine.store.GetHistory(ctx, startResp.WorkflowId)
+	if !containsEvent(hist, EventTypeWorkflowCancelRequested) {
+		t.Errorf("history missing WorkflowCancelRequested: %v", eventTypes(hist))
+	}
+}
+
+func containsEvent(events []store.Event, eventType string) bool {
+	for _, e := range events {
+		if e.Type == eventType {
+			return true
+		}
+	}
+	return false
+}
+
 func eventTypes(events []store.Event) []string {
 	out := make([]string, len(events))
 	for i, e := range events {
