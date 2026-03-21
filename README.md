@@ -16,6 +16,8 @@ Currently shipping toward production-grade per the
 | Activity retries (exponential)        | shipped  | `RetryPolicy.BackoffFor` plus durable retry timers      |
 | Signals end-to-end                    | shipped  | `SignalWorkflow` push and `WaitForSignal` pull          |
 | Activity heartbeats                   | shipped  | `RecordActivityHeartbeat` extends visibility timeout    |
+| Workflow execution timeout            | shipped  | `workflow_execution_timeout_seconds` on `StartWorkflow` |
+| Workflow cancellation                 | shipped  | `CancelWorkflow` RPC + `cancel_requested` on heartbeats |
 | Structured logging (slog)             | shipped  | JSON or text, level via env                             |
 | Prometheus metrics                    | shipped  | `/metrics` on the engine                                |
 | golangci-lint and GitHub Actions CI   | shipped  | `make lint`; CI runs build, test, lint with Postgres+Redis services |

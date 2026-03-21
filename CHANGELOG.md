@@ -52,6 +52,23 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
+### Added (Phase 3.5)
+
+- `StartWorkflowRequest.workflow_execution_timeout_seconds`. When set,
+  the engine arms a durable timer; if the workflow has not reached a
+  terminal state by then, it is marked `TIMED_OUT` and a
+  `WorkflowTimedOut` event lands in history.
+- `EngineService.CancelWorkflow` RPC. Marks an in-flight workflow for
+  cancellation and writes a `WorkflowCancelRequested` event. The
+  in-process `cancelRequested` set drives the existing
+  `cancel_requested` field on subsequent `RecordActivityHeartbeat`
+  responses, so cooperative activities can return early via
+  `ActivityContext.Heartbeat(...)`.
+- `store.StatusCanceled` and the matching `EventWorkflowCanceled` /
+  `EventWorkflowCancelRequested` / `EventWorkflowTimedOut` event types.
+- Engine bufconn tests covering both flows
+  (`TestWorkflowExecutionTimeout`, `TestCancelWorkflow`).
+
 ### Added (Phase 5.4)
 
 - `internal/observability/tracing.go`. `InitTracing` installs the
