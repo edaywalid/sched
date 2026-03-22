@@ -10,7 +10,13 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "github.com/edaywalid/sched/proto"
 import "fmt"
+import "strings"
 import "time"
+
+// statusClass converts an engine status string into the matching
+// status-* CSS class. Engine statuses are upper-case ("RUNNING",
+// "TIMED_OUT") while the CSS lives in lower-case so this normalises.
+func statusClass(s string) string { return "status-" + strings.ToLower(s) }
 
 func Layout(title string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -40,13 +46,13 @@ func Layout(title string) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 13, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 19, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " - Sched Dashboard</title><script src=\"https://unpkg.com/htmx.org@1.9.10\"></script><script src=\"https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js\"></script><style>\n\t\t\t\t* {\n\t\t\t\t\tmargin: 0;\n\t\t\t\t\tpadding: 0;\n\t\t\t\t\tbox-sizing: border-box;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\tbody {\n\t\t\t\t\tfont-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;\n\t\t\t\t\tbackground: #f5f5f5;\n\t\t\t\t\tmin-height: 100vh;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.container {\n\t\t\t\t\tmax-width: 1400px;\n\t\t\t\t\tmargin: 0 auto;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\theader {\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder-bottom: 2px solid #e0e0e0;\n\t\t\t\t\tmargin-bottom: 2rem;\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tjustify-content: space-between;\n\t\t\t\t\talign-items: center;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\th1 {\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t\tfont-size: 2rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.refresh-btn {\n\t\t\t\t\tpadding: 0.75rem 1.5rem;\n\t\t\t\t\tbackground: #212121;\n\t\t\t\t\tcolor: white;\n\t\t\t\t\tborder: none;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tcursor: pointer;\n\t\t\t\t\tfont-size: 1rem;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t\ttransition: all 0.2s;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.refresh-btn:hover {\n\t\t\t\t\tbackground: #424242;\n\t\t\t\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metrics-grid {\n\t\t\t\t\tdisplay: grid;\n\t\t\t\t\tgrid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n\t\t\t\t\tgap: 1.5rem;\n\t\t\t\t\tmargin-bottom: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-card {\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 1.5rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t\ttext-align: center;\n\t\t\t\t\ttransition: all 0.2s;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-card:hover {\n\t\t\t\t\tborder-color: #bdbdbd;\n\t\t\t\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-value {\n\t\t\t\t\tfont-size: 3rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t\tmargin-bottom: 0.5rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-label {\n\t\t\t\t\tfont-size: 0.9rem;\n\t\t\t\t\tcolor: #757575;\n\t\t\t\t\ttext-transform: uppercase;\n\t\t\t\t\tletter-spacing: 1px;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-card.running .metric-value { color: #1976D2; }\n\t\t\t\t.metric-card.completed .metric-value { color: #388E3C; }\n\t\t\t\t.metric-card.failed .metric-value { color: #D32F2F; }\n\t\t\t\t\n\t\t\t\t.workflows-section {\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.section-header {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tjustify-content: space-between;\n\t\t\t\t\talign-items: center;\n\t\t\t\t\tmargin-bottom: 2rem;\n\t\t\t\t\tpadding-bottom: 1rem;\n\t\t\t\t\tborder-bottom: 2px solid #e0e0e0;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-list {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tflex-direction: column;\n\t\t\t\t\tgap: 1rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-card {\n\t\t\t\t\tbackground: #fafafa;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tpadding: 1.5rem;\n\t\t\t\t\ttransition: all 0.2s;\n\t\t\t\t\tcursor: pointer;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-card:hover {\n\t\t\t\t\tborder-color: #212121;\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-header {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tjustify-content: space-between;\n\t\t\t\t\talign-items: center;\n\t\t\t\t\tmargin-bottom: 1rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-name {\n\t\t\t\t\tfont-size: 1.25rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.status-badge {\n\t\t\t\t\tpadding: 0.5rem 1rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tfont-size: 0.85rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\ttext-transform: uppercase;\n\t\t\t\t\tletter-spacing: 0.5px;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.status-running { background: #E3F2FD; color: #1976D2; border: 1px solid #1976D2; }\n\t\t\t\t.status-completed { background: #E8F5E9; color: #388E3C; border: 1px solid #388E3C; }\n\t\t\t\t.status-failed { background: #FFEBEE; color: #D32F2F; border: 1px solid #D32F2F; }\n\t\t\t\t.status-pending { background: #FFF3E0; color: #F57C00; border: 1px solid #F57C00; }\n\t\t\t\t\n\t\t\t\t.workflow-meta {\n\t\t\t\t\tdisplay: grid;\n\t\t\t\t\tgrid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n\t\t\t\t\tgap: 1rem;\n\t\t\t\t\tfont-size: 0.9rem;\n\t\t\t\t\tcolor: #616161;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.meta-label {\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tmargin-right: 0.5rem;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-detail {\n\t\t\t\t\tmargin-top: 2rem;\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.timeline {\n\t\t\t\t\tposition: relative;\n\t\t\t\t\tpadding-left: 2rem;\n\t\t\t\t\tmargin-top: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.timeline::before {\n\t\t\t\t\tcontent: '';\n\t\t\t\t\tposition: absolute;\n\t\t\t\t\tleft: 9px;\n\t\t\t\t\ttop: 0;\n\t\t\t\t\tbottom: 0;\n\t\t\t\t\twidth: 2px;\n\t\t\t\t\tbackground: #bdbdbd;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.timeline-event {\n\t\t\t\t\tposition: relative;\n\t\t\t\t\tmargin-bottom: 1.5rem;\n\t\t\t\t\tpadding-left: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.event-marker {\n\t\t\t\t\tposition: absolute;\n\t\t\t\t\tleft: 0;\n\t\t\t\t\ttop: 4px;\n\t\t\t\t\twidth: 20px;\n\t\t\t\t\theight: 20px;\n\t\t\t\t\tborder-radius: 50%;\n\t\t\t\t\tbackground: #212121;\n\t\t\t\t\tborder: 3px solid white;\n\t\t\t\t\tbox-shadow: 0 0 0 2px #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.event-content {\n\t\t\t\t\tbackground: #fafafa;\n\t\t\t\t\tpadding: 1rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder-left: 3px solid #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.event-type {\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t\tmargin-bottom: 0.5rem;\n\t\t\t\t\ttext-transform: uppercase;\n\t\t\t\t\tfont-size: 0.85rem;\n\t\t\t\t\tletter-spacing: 0.5px;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.event-time {\n\t\t\t\t\tfont-size: 0.85rem;\n\t\t\t\t\tcolor: #757575;\n\t\t\t\t\tfont-family: 'Courier New', monospace;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.loading {\n\t\t\t\t\ttext-align: center;\n\t\t\t\t\tpadding: 3rem;\n\t\t\t\t\tcolor: #757575;\n\t\t\t\t\tfont-size: 1.2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.start-workflow-section {\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t\tmargin-bottom: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-form {\n\t\t\t\t\tdisplay: grid;\n\t\t\t\t\tgrid-template-columns: 1fr 1fr 120px;\n\t\t\t\t\tgap: 1rem;\n\t\t\t\t\talign-items: end;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.form-group {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tflex-direction: column;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.form-label {\n\t\t\t\t\tfont-size: 0.9rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t\tmargin-bottom: 0.5rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.form-input {\n\t\t\t\t\tpadding: 0.75rem;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tfont-size: 1rem;\n\t\t\t\t\tfont-family: inherit;\n\t\t\t\t\ttransition: border-color 0.2s;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.form-input:focus {\n\t\t\t\t\toutline: none;\n\t\t\t\t\tborder-color: #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.start-btn {\n\t\t\t\t\tpadding: 0.75rem 1.5rem;\n\t\t\t\t\tbackground: #212121;\n\t\t\t\t\tcolor: white;\n\t\t\t\t\tborder: none;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tcursor: pointer;\n\t\t\t\t\tfont-size: 1rem;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t\ttransition: all 0.2s;\n\t\t\t\t\theight: fit-content;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.start-btn:hover {\n\t\t\t\t\tbackground: #424242;\n\t\t\t\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.start-btn:disabled {\n\t\t\t\t\tbackground: #bdbdbd;\n\t\t\t\t\tcursor: not-allowed;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.success-message {\n\t\t\t\t\tmargin-top: 1rem;\n\t\t\t\t\tpadding: 0.75rem;\n\t\t\t\t\tbackground: #E8F5E9;\n\t\t\t\t\tcolor: #388E3C;\n\t\t\t\t\tborder-left: 3px solid #388E3C;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.error-message {\n\t\t\t\t\tmargin-top: 1rem;\n\t\t\t\t\tpadding: 0.75rem;\n\t\t\t\t\tbackground: #FFEBEE;\n\t\t\t\t\tcolor: #D32F2F;\n\t\t\t\t\tborder-left: 3px solid #D32F2F;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t}\n\t\t\t</style></head><body><div class=\"container\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " - Sched Dashboard</title><script src=\"https://unpkg.com/htmx.org@1.9.10\"></script><script src=\"https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js\"></script><style>\n\t\t\t\t* {\n\t\t\t\t\tmargin: 0;\n\t\t\t\t\tpadding: 0;\n\t\t\t\t\tbox-sizing: border-box;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\tbody {\n\t\t\t\t\tfont-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;\n\t\t\t\t\tbackground: #f5f5f5;\n\t\t\t\t\tmin-height: 100vh;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.container {\n\t\t\t\t\tmax-width: 1400px;\n\t\t\t\t\tmargin: 0 auto;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\theader {\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder-bottom: 2px solid #e0e0e0;\n\t\t\t\t\tmargin-bottom: 2rem;\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tjustify-content: space-between;\n\t\t\t\t\talign-items: center;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\th1 {\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t\tfont-size: 2rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.refresh-btn {\n\t\t\t\t\tpadding: 0.75rem 1.5rem;\n\t\t\t\t\tbackground: #212121;\n\t\t\t\t\tcolor: white;\n\t\t\t\t\tborder: none;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tcursor: pointer;\n\t\t\t\t\tfont-size: 1rem;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t\ttransition: all 0.2s;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.refresh-btn:hover {\n\t\t\t\t\tbackground: #424242;\n\t\t\t\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metrics-grid {\n\t\t\t\t\tdisplay: grid;\n\t\t\t\t\tgrid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n\t\t\t\t\tgap: 1.5rem;\n\t\t\t\t\tmargin-bottom: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-card {\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 1.5rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t\ttext-align: center;\n\t\t\t\t\ttransition: all 0.2s;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-card:hover {\n\t\t\t\t\tborder-color: #bdbdbd;\n\t\t\t\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-value {\n\t\t\t\t\tfont-size: 3rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t\tmargin-bottom: 0.5rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-label {\n\t\t\t\t\tfont-size: 0.9rem;\n\t\t\t\t\tcolor: #757575;\n\t\t\t\t\ttext-transform: uppercase;\n\t\t\t\t\tletter-spacing: 1px;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.metric-card.running .metric-value { color: #1976D2; }\n\t\t\t\t.metric-card.completed .metric-value { color: #388E3C; }\n\t\t\t\t.metric-card.failed .metric-value { color: #D32F2F; }\n\t\t\t\t\n\t\t\t\t.workflows-section {\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.section-header {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tjustify-content: space-between;\n\t\t\t\t\talign-items: center;\n\t\t\t\t\tmargin-bottom: 2rem;\n\t\t\t\t\tpadding-bottom: 1rem;\n\t\t\t\t\tborder-bottom: 2px solid #e0e0e0;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-list {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tflex-direction: column;\n\t\t\t\t\tgap: 1rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-card {\n\t\t\t\t\tbackground: #fafafa;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tpadding: 1.5rem;\n\t\t\t\t\ttransition: all 0.2s;\n\t\t\t\t\tcursor: pointer;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-card:hover {\n\t\t\t\t\tborder-color: #212121;\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-header {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tjustify-content: space-between;\n\t\t\t\t\talign-items: center;\n\t\t\t\t\tmargin-bottom: 1rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-name {\n\t\t\t\t\tfont-size: 1.25rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.status-badge {\n\t\t\t\t\tpadding: 0.5rem 1rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tfont-size: 0.85rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\ttext-transform: uppercase;\n\t\t\t\t\tletter-spacing: 0.5px;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.status-running { background: #E3F2FD; color: #1976D2; border: 1px solid #1976D2; }\n\t\t\t\t.status-completed { background: #E8F5E9; color: #388E3C; border: 1px solid #388E3C; }\n\t\t\t\t.status-failed { background: #FFEBEE; color: #D32F2F; border: 1px solid #D32F2F; }\n\t\t\t\t.status-pending { background: #FFF3E0; color: #F57C00; border: 1px solid #F57C00; }\n\t\t\t\t.status-timed_out { background: #FFF8E1; color: #F57F17; border: 1px solid #F57F17; }\n\t\t\t\t.status-canceled { background: #ECEFF1; color: #455A64; border: 1px solid #455A64; }\n\n\t\t\t\t.cancel-btn {\n\t\t\t\t\tbackground: #D32F2F;\n\t\t\t\t\tcolor: white;\n\t\t\t\t\tpadding: 0.5rem 1rem;\n\t\t\t\t\tborder: none;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tcursor: pointer;\n\t\t\t\t\tmargin-left: auto;\n\t\t\t\t}\n\t\t\t\t.cancel-btn:hover { background: #B71C1C; }\n\t\t\t\t.cancel-btn:disabled { background: #BDBDBD; cursor: not-allowed; }\n\t\t\t\t\n\t\t\t\t.workflow-meta {\n\t\t\t\t\tdisplay: grid;\n\t\t\t\t\tgrid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n\t\t\t\t\tgap: 1rem;\n\t\t\t\t\tfont-size: 0.9rem;\n\t\t\t\t\tcolor: #616161;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.meta-label {\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tmargin-right: 0.5rem;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-detail {\n\t\t\t\t\tmargin-top: 2rem;\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.timeline {\n\t\t\t\t\tposition: relative;\n\t\t\t\t\tpadding-left: 2rem;\n\t\t\t\t\tmargin-top: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.timeline::before {\n\t\t\t\t\tcontent: '';\n\t\t\t\t\tposition: absolute;\n\t\t\t\t\tleft: 9px;\n\t\t\t\t\ttop: 0;\n\t\t\t\t\tbottom: 0;\n\t\t\t\t\twidth: 2px;\n\t\t\t\t\tbackground: #bdbdbd;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.timeline-event {\n\t\t\t\t\tposition: relative;\n\t\t\t\t\tmargin-bottom: 1.5rem;\n\t\t\t\t\tpadding-left: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.event-marker {\n\t\t\t\t\tposition: absolute;\n\t\t\t\t\tleft: 0;\n\t\t\t\t\ttop: 4px;\n\t\t\t\t\twidth: 20px;\n\t\t\t\t\theight: 20px;\n\t\t\t\t\tborder-radius: 50%;\n\t\t\t\t\tbackground: #212121;\n\t\t\t\t\tborder: 3px solid white;\n\t\t\t\t\tbox-shadow: 0 0 0 2px #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.event-content {\n\t\t\t\t\tbackground: #fafafa;\n\t\t\t\t\tpadding: 1rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder-left: 3px solid #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.event-type {\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t\tmargin-bottom: 0.5rem;\n\t\t\t\t\ttext-transform: uppercase;\n\t\t\t\t\tfont-size: 0.85rem;\n\t\t\t\t\tletter-spacing: 0.5px;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.event-time {\n\t\t\t\t\tfont-size: 0.85rem;\n\t\t\t\t\tcolor: #757575;\n\t\t\t\t\tfont-family: 'Courier New', monospace;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.loading {\n\t\t\t\t\ttext-align: center;\n\t\t\t\t\tpadding: 3rem;\n\t\t\t\t\tcolor: #757575;\n\t\t\t\t\tfont-size: 1.2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.start-workflow-section {\n\t\t\t\t\tbackground: #ffffff;\n\t\t\t\t\tpadding: 2rem;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t\tmargin-bottom: 2rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.workflow-form {\n\t\t\t\t\tdisplay: grid;\n\t\t\t\t\tgrid-template-columns: 1fr 1fr 120px;\n\t\t\t\t\tgap: 1rem;\n\t\t\t\t\talign-items: end;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.form-group {\n\t\t\t\t\tdisplay: flex;\n\t\t\t\t\tflex-direction: column;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.form-label {\n\t\t\t\t\tfont-size: 0.9rem;\n\t\t\t\t\tfont-weight: 600;\n\t\t\t\t\tcolor: #212121;\n\t\t\t\t\tmargin-bottom: 0.5rem;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.form-input {\n\t\t\t\t\tpadding: 0.75rem;\n\t\t\t\t\tborder: 1px solid #e0e0e0;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tfont-size: 1rem;\n\t\t\t\t\tfont-family: inherit;\n\t\t\t\t\ttransition: border-color 0.2s;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.form-input:focus {\n\t\t\t\t\toutline: none;\n\t\t\t\t\tborder-color: #212121;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.start-btn {\n\t\t\t\t\tpadding: 0.75rem 1.5rem;\n\t\t\t\t\tbackground: #212121;\n\t\t\t\t\tcolor: white;\n\t\t\t\t\tborder: none;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tcursor: pointer;\n\t\t\t\t\tfont-size: 1rem;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t\ttransition: all 0.2s;\n\t\t\t\t\theight: fit-content;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.start-btn:hover {\n\t\t\t\t\tbackground: #424242;\n\t\t\t\t\tbox-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.start-btn:disabled {\n\t\t\t\t\tbackground: #bdbdbd;\n\t\t\t\t\tcursor: not-allowed;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.success-message {\n\t\t\t\t\tmargin-top: 1rem;\n\t\t\t\t\tpadding: 0.75rem;\n\t\t\t\t\tbackground: #E8F5E9;\n\t\t\t\t\tcolor: #388E3C;\n\t\t\t\t\tborder-left: 3px solid #388E3C;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\t.error-message {\n\t\t\t\t\tmargin-top: 1rem;\n\t\t\t\t\tpadding: 0.75rem;\n\t\t\t\t\tbackground: #FFEBEE;\n\t\t\t\t\tcolor: #D32F2F;\n\t\t\t\t\tborder-left: 3px solid #D32F2F;\n\t\t\t\t\tborder-radius: 4px;\n\t\t\t\t\tfont-weight: 500;\n\t\t\t\t}\n\t\t\t</style></head><body><div class=\"container\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -153,7 +159,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", metrics.TotalWorkflows))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 399, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 420, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -166,7 +172,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", metrics.RunningWorkflows))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 403, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 424, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -179,7 +185,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", metrics.CompletedWorkflows))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 407, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 428, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -192,7 +198,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", metrics.FailedWorkflows))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 411, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 432, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -206,7 +212,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f%%", float64(metrics.CompletedWorkflows)/float64(metrics.TotalWorkflows)*100))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 417, Col: 105}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 438, Col: 105}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -225,7 +231,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.0fms", metrics.AvgExecutionTimeMs))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 425, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 446, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -278,7 +284,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var13 templ.SafeURL
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/workflow/%s", wf.WorkflowId)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 440, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 461, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -291,7 +297,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(wf.WorkflowName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 442, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 463, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -301,7 +307,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var15 = []any{fmt.Sprintf("status-badge status-%s", wf.Status)}
+			var templ_7745c5c3_Var15 = []any{"status-badge " + statusClass(wf.Status)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var15...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -326,7 +332,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(wf.Status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 443, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 464, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -339,7 +345,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(wf.WorkflowId[:8])
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 448, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 469, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -352,7 +358,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(wf.StartTime, 0).Format("2006-01-02 15:04:05"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 452, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 473, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -370,7 +376,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.2fs", float64(wf.EndTime-wf.StartTime)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 457, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 478, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 				if templ_7745c5c3_Err != nil {
@@ -393,7 +399,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(wf.Error)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 463, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 484, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 				if templ_7745c5c3_Err != nil {
@@ -457,7 +463,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.WorkflowName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 475, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 496, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -470,7 +476,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.WorkflowName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 481, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 502, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
@@ -480,7 +486,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var26 = []any{fmt.Sprintf("status-badge status-%s", details.Execution.Status)}
+			var templ_7745c5c3_Var26 = []any{"status-badge " + statusClass(details.Execution.Status)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var26...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -505,189 +511,212 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.Status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 482, Col: 110}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 503, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</span></div><div class=\"workflow-meta\" style=\"margin-top: 2rem;\"><div><span class=\"meta-label\">Workflow ID:</span> <span style=\"font-family: monospace;\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var29 string
-			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.WorkflowId)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 488, Col: 73}
+			if details.Execution.Status == "RUNNING" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<button class=\"cancel-btn\" hx-post=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var29 string
+				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/cancel-workflow?id=" + details.Execution.WorkflowId)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 507, Col: 73}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" hx-confirm=\"Cancel this workflow? Activities in flight will see cancel_requested on their next heartbeat.\" hx-target=\"#cancel-result\" hx-swap=\"innerHTML\">Cancel</button><div id=\"cancel-result\" style=\"margin-left: 1rem;\"></div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</span></div><div><span class=\"meta-label\">Started:</span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</div><div class=\"workflow-meta\" style=\"margin-top: 2rem;\"><div><span class=\"meta-label\">Workflow ID:</span> <span style=\"font-family: monospace;\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var30 string
-			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(details.Execution.StartTime, 0).Format("2006-01-02 15:04:05"))
+			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.WorkflowId)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 492, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 521, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</span></div><div><span class=\"meta-label\">Started:</span> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var31 string
+			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(details.Execution.StartTime, 0).Format("2006-01-02 15:04:05"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 525, Col: 78}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if details.Execution.EndTime > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<div><span class=\"meta-label\">Completed:</span> ")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var31 string
-				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(details.Execution.EndTime, 0).Format("2006-01-02 15:04:05"))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 497, Col: 77}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</div><div><span class=\"meta-label\">Duration:</span> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div><span class=\"meta-label\">Completed:</span> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var32 string
-				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.2fs", float64(details.Execution.EndTime-details.Execution.StartTime)))
+				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(details.Execution.EndTime, 0).Format("2006-01-02 15:04:05"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 501, Col: 94}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 530, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if details.Execution.Result != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<div style=\"margin-top: 2rem; padding: 1rem; background: #E8F5E9; border-left: 4px solid #388E3C; border-radius: 4px;\"><h3 style=\"margin-bottom: 0.5rem; color: #212121; font-weight: 600;\">Result</h3><pre style=\"font-family: monospace; white-space: pre-wrap; word-break: break-word; color: #424242;\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</div><div><span class=\"meta-label\">Duration:</span> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var33 string
-				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.Result)
+				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.2fs", float64(details.Execution.EndTime-details.Execution.StartTime)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 509, Col: 131}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 534, Col: 94}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</pre></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			if details.Execution.Error != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div style=\"margin-top: 2rem; padding: 1rem; background: #FFEBEE; border-left: 4px solid #D32F2F; border-radius: 4px;\"><h3 style=\"margin-bottom: 0.5rem; color: #212121; font-weight: 600;\">Error</h3><pre style=\"font-family: monospace; white-space: pre-wrap; word-break: break-word; color: #424242;\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if details.Execution.Result != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<div style=\"margin-top: 2rem; padding: 1rem; background: #E8F5E9; border-left: 4px solid #388E3C; border-radius: 4px;\"><h3 style=\"margin-bottom: 0.5rem; color: #212121; font-weight: 600;\">Result</h3><pre style=\"font-family: monospace; white-space: pre-wrap; word-break: break-word; color: #424242;\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var34 string
-				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.Error)
+				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.Result)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 516, Col: 130}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 542, Col: 131}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</pre></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</pre></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<div style=\"margin-top: 2rem;\"><h2 style=\"margin-bottom: 1rem;\">Event History (")
+			if details.Execution.Error != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<div style=\"margin-top: 2rem; padding: 1rem; background: #FFEBEE; border-left: 4px solid #D32F2F; border-radius: 4px;\"><h3 style=\"margin-bottom: 0.5rem; color: #212121; font-weight: 600;\">Error</h3><pre style=\"font-family: monospace; white-space: pre-wrap; word-break: break-word; color: #424242;\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var35 string
+				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.Error)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 549, Col: 130}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</pre></div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<div style=\"margin-top: 2rem;\"><h2 style=\"margin-bottom: 1rem;\">Event History (")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var35 string
-			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", len(details.History)))
+			var templ_7745c5c3_Var36 string
+			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", len(details.History)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 521, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 554, Col: 93}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, " events)</h2><div class=\"timeline\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, " events)</h2><div class=\"timeline\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, event := range details.History {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<div class=\"timeline-event\"><div class=\"event-marker\"></div><div class=\"event-content\"><div class=\"event-type\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var36 string
-				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(event.EventType)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 527, Col: 49}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</div><div class=\"event-time\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<div class=\"timeline-event\"><div class=\"event-marker\"></div><div class=\"event-content\"><div class=\"event-type\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var37 string
-				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(event.Timestamp, 0).Format("15:04:05.000"))
+				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(event.EventType)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 528, Col: 86}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 560, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</div><div class=\"event-time\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var38 string
+				templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(event.Timestamp, 0).Format("15:04:05.000"))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 561, Col: 86}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if event.Details != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<pre style=\"margin-top: 0.5rem; padding: 0.75rem; background: white; border-radius: 4px; font-size: 0.85rem; overflow-x: auto;\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<pre style=\"margin-top: 0.5rem; padding: 0.75rem; background: white; border-radius: 4px; font-size: 0.85rem; overflow-x: auto;\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var38 string
-					templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(event.Details)
+					var templ_7745c5c3_Var39 string
+					templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(event.Details)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 530, Col: 152}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 563, Col: 152}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</pre>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</pre>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "</div></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

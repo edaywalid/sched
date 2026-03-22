@@ -2,7 +2,13 @@ package templates
 
 import "github.com/edaywalid/sched/proto"
 import "fmt"
+import "strings"
 import "time"
+
+// statusClass converts an engine status string into the matching
+// status-* CSS class. Engine statuses are upper-case ("RUNNING",
+// "TIMED_OUT") while the CSS lives in lower-case so this normalises.
+func statusClass(s string) string { return "status-" + strings.ToLower(s) }
 
 templ Layout(title string) {
 	<!DOCTYPE html>
@@ -169,6 +175,21 @@ templ Layout(title string) {
 				.status-completed { background: #E8F5E9; color: #388E3C; border: 1px solid #388E3C; }
 				.status-failed { background: #FFEBEE; color: #D32F2F; border: 1px solid #D32F2F; }
 				.status-pending { background: #FFF3E0; color: #F57C00; border: 1px solid #F57C00; }
+				.status-timed_out { background: #FFF8E1; color: #F57F17; border: 1px solid #F57F17; }
+				.status-canceled { background: #ECEFF1; color: #455A64; border: 1px solid #455A64; }
+
+				.cancel-btn {
+					background: #D32F2F;
+					color: white;
+					padding: 0.5rem 1rem;
+					border: none;
+					border-radius: 4px;
+					font-weight: 600;
+					cursor: pointer;
+					margin-left: auto;
+				}
+				.cancel-btn:hover { background: #B71C1C; }
+				.cancel-btn:disabled { background: #BDBDBD; cursor: not-allowed; }
 				
 				.workflow-meta {
 					display: grid;
@@ -440,7 +461,7 @@ templ WorkflowList(workflows []*proto.WorkflowExecutionInfo) {
 				<a href={ templ.SafeURL(fmt.Sprintf("/workflow/%s", wf.WorkflowId)) } style="text-decoration: none; color: inherit; display: block;">
 					<div class="workflow-header">
 						<div class="workflow-name">{ wf.WorkflowName }</div>
-						<span class={ fmt.Sprintf("status-badge status-%s", wf.Status) }>{ wf.Status }</span>
+						<span class={ "status-badge " + statusClass(wf.Status) }>{ wf.Status }</span>
 					</div>
 				<div class="workflow-meta">
 					<div>
@@ -479,7 +500,19 @@ templ WorkflowDetail(details *proto.GetWorkflowDetailsResponse) {
 		<div class="workflow-detail">
 			<div class="workflow-header">
 				<div class="workflow-name">{ details.Execution.WorkflowName }</div>
-				<span class={ fmt.Sprintf("status-badge status-%s", details.Execution.Status) }>{ details.Execution.Status }</span>
+				<span class={ "status-badge " + statusClass(details.Execution.Status) }>{ details.Execution.Status }</span>
+				if details.Execution.Status == "RUNNING" {
+					<button
+						class="cancel-btn"
+						hx-post={ "/api/cancel-workflow?id=" + details.Execution.WorkflowId }
+						hx-confirm="Cancel this workflow? Activities in flight will see cancel_requested on their next heartbeat."
+						hx-target="#cancel-result"
+						hx-swap="innerHTML"
+					>
+						Cancel
+					</button>
+					<div id="cancel-result" style="margin-left: 1rem;"></div>
+				}
 			</div>
 			
 			<div class="workflow-meta" style="margin-top: 2rem;">
