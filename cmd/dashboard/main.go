@@ -188,12 +188,43 @@ func (s *DashboardServer) handleStartWorkflow(w http.ResponseWriter, r *http.Req
 	w.Header().Set("HX-Trigger", "refresh")
 }
 
+func (s *DashboardServer) handleCancelWorkflow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	workflowID := r.URL.Query().Get("id")
+	if workflowID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `<div class="error-message">Missing workflow id</div>`)
+		return
+	}
+	reason := r.URL.Query().Get("reason")
+	if reason == "" {
+		reason = "cancelled from dashboard"
+	}
+
+	if _, err := s.engineClient.CancelWorkflow(ctx, &proto.CancelWorkflowRequest{
+		WorkflowId: workflowID,
+		Reason:     reason,
+	}); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `<div class="error-message">Cancel failed: %v</div>`, err)
+		return
+	}
+	fmt.Fprint(w, `<span style="color:#388E3C;font-weight:600;">Cancel requested</span>`)
+}
+
 func (s *DashboardServer) Start(address string) error {
 	// Routes
 	http.HandleFunc("/", s.handleIndex)
 	http.HandleFunc("/api/metrics-html", s.handleMetricsHTML)
 	http.HandleFunc("/api/workflows-html", s.handleWorkflowsHTML)
 	http.HandleFunc("/api/start-workflow", s.handleStartWorkflow)
+	http.HandleFunc("/api/cancel-workflow", s.handleCancelWorkflow)
 	http.HandleFunc("/workflow/", s.handleWorkflowDetail)
 
 	// Health check
