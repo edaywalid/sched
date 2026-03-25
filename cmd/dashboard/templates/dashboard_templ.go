@@ -101,7 +101,7 @@ func Index(metrics *proto.WorkflowMetrics, workflows []*proto.WorkflowExecutionI
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<header><h1>Sched Workflow Engine</h1><button class=\"refresh-btn\" onclick=\"location.reload()\">Refresh</button></header><div class=\"start-workflow-section\"><h2 style=\"margin-bottom: 1rem;\">Start Workflow</h2><form class=\"workflow-form\" hx-post=\"/api/start-workflow\" hx-target=\"#form-message\" hx-swap=\"innerHTML\"><div class=\"form-group\"><label class=\"form-label\" for=\"workflow-name\">Workflow Name</label> <input type=\"text\" id=\"workflow-name\" name=\"workflow_name\" class=\"form-input\" placeholder=\"e.g., HelloWorld, MonthlyReport\" required></div><div class=\"form-group\"><label class=\"form-label\" for=\"workflow-input\">Input (JSON or text)</label> <input type=\"text\" id=\"workflow-input\" name=\"input\" class=\"form-input\" placeholder='e.g., \"John Doe\" or {\"key\": \"value\"}'></div><button type=\"submit\" class=\"start-btn\">Start</button></form><div id=\"form-message\"></div></div><div id=\"metrics-container\" hx-get=\"/api/metrics-html\" hx-trigger=\"refresh\" hx-swap=\"outerHTML\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<header><h1>Sched Workflow Engine</h1><button class=\"refresh-btn\" onclick=\"location.reload()\">Refresh</button></header><div class=\"start-workflow-section\"><h2 style=\"margin-bottom: 1rem;\">Start Workflow</h2><form class=\"workflow-form\" hx-post=\"/api/start-workflow\" hx-target=\"#form-message\" hx-swap=\"innerHTML\"><div class=\"form-group\"><label class=\"form-label\" for=\"workflow-name\">Workflow Name</label> <input type=\"text\" id=\"workflow-name\" name=\"workflow_name\" class=\"form-input\" placeholder=\"e.g., HelloWorld, MonthlyReport\" required></div><div class=\"form-group\"><label class=\"form-label\" for=\"workflow-input\">Input (JSON or text)</label> <input type=\"text\" id=\"workflow-input\" name=\"input\" class=\"form-input\" placeholder='e.g., \"John Doe\" or {\"key\": \"value\"}'></div><div class=\"form-group\"><label class=\"form-label\" for=\"workflow-timeout\">Execution timeout (seconds, 0 to disable)</label> <input type=\"number\" id=\"workflow-timeout\" name=\"execution_timeout_seconds\" class=\"form-input\" min=\"0\" placeholder=\"0\" value=\"0\"></div><button type=\"submit\" class=\"start-btn\">Start</button></form><div id=\"form-message\"></div></div><div id=\"metrics-container\" hx-get=\"/api/metrics-html\" hx-trigger=\"refresh\" hx-swap=\"outerHTML\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -109,7 +109,7 @@ func Index(metrics *proto.WorkflowMetrics, workflows []*proto.WorkflowExecutionI
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"workflows-section\"><div class=\"section-header\"><h2>Workflows</h2></div><div id=\"workflows-container\" hx-get=\"/api/workflows-html\" hx-trigger=\"refresh\" hx-swap=\"outerHTML\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"workflows-section\"><div class=\"section-header\"><h2>Workflows</h2><div class=\"status-filters\" style=\"display:flex;gap:0.4rem;flex-wrap:wrap;\"><button class=\"refresh-btn\" hx-get=\"/api/workflows-html\" hx-target=\"#workflows-container\" hx-swap=\"innerHTML\">All</button> <button class=\"refresh-btn\" hx-get=\"/api/workflows-html?status=RUNNING\" hx-target=\"#workflows-container\" hx-swap=\"innerHTML\">Running</button> <button class=\"refresh-btn\" hx-get=\"/api/workflows-html?status=COMPLETED\" hx-target=\"#workflows-container\" hx-swap=\"innerHTML\">Completed</button> <button class=\"refresh-btn\" hx-get=\"/api/workflows-html?status=FAILED\" hx-target=\"#workflows-container\" hx-swap=\"innerHTML\">Failed</button> <button class=\"refresh-btn\" hx-get=\"/api/workflows-html?status=TIMED_OUT\" hx-target=\"#workflows-container\" hx-swap=\"innerHTML\">Timed out</button> <button class=\"refresh-btn\" hx-get=\"/api/workflows-html?status=CANCELED\" hx-target=\"#workflows-container\" hx-swap=\"innerHTML\">Canceled</button></div></div><div id=\"workflows-container\" hx-get=\"/api/workflows-html\" hx-trigger=\"refresh\" hx-swap=\"innerHTML\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -159,7 +159,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", metrics.TotalWorkflows))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 420, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 432, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -172,7 +172,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", metrics.RunningWorkflows))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 424, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 436, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -185,7 +185,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", metrics.CompletedWorkflows))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 428, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 440, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -198,7 +198,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", metrics.FailedWorkflows))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 432, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 444, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -212,7 +212,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f%%", float64(metrics.CompletedWorkflows)/float64(metrics.TotalWorkflows)*100))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 438, Col: 105}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 450, Col: 105}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -231,7 +231,7 @@ func MetricsGrid(metrics *proto.WorkflowMetrics) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.0fms", metrics.AvgExecutionTimeMs))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 446, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 458, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -284,7 +284,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var13 templ.SafeURL
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/workflow/%s", wf.WorkflowId)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 461, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 473, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -297,7 +297,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(wf.WorkflowName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 463, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 475, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -332,7 +332,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(wf.Status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 464, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 476, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -345,7 +345,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(wf.WorkflowId[:8])
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 469, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 481, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -358,7 +358,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(wf.StartTime, 0).Format("2006-01-02 15:04:05"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 473, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 485, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -376,7 +376,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.2fs", float64(wf.EndTime-wf.StartTime)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 478, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 490, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 				if templ_7745c5c3_Err != nil {
@@ -399,7 +399,7 @@ func WorkflowList(workflows []*proto.WorkflowExecutionInfo) templ.Component {
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(wf.Error)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 484, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 496, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 				if templ_7745c5c3_Err != nil {
@@ -463,7 +463,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.WorkflowName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 496, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 508, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -476,7 +476,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.WorkflowName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 502, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 514, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
@@ -511,7 +511,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.Status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 503, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 515, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
@@ -529,7 +529,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/cancel-workflow?id=" + details.Execution.WorkflowId)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 507, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 519, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 				if templ_7745c5c3_Err != nil {
@@ -547,7 +547,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			var templ_7745c5c3_Var30 string
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.WorkflowId)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 521, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 533, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {
@@ -560,7 +560,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(details.Execution.StartTime, 0).Format("2006-01-02 15:04:05"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 525, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 537, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 			if templ_7745c5c3_Err != nil {
@@ -578,7 +578,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 				var templ_7745c5c3_Var32 string
 				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(details.Execution.EndTime, 0).Format("2006-01-02 15:04:05"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 530, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 542, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 				if templ_7745c5c3_Err != nil {
@@ -591,7 +591,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 				var templ_7745c5c3_Var33 string
 				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.2fs", float64(details.Execution.EndTime-details.Execution.StartTime)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 534, Col: 94}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 546, Col: 94}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 				if templ_7745c5c3_Err != nil {
@@ -614,7 +614,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 				var templ_7745c5c3_Var34 string
 				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.Result)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 542, Col: 131}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 554, Col: 131}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 				if templ_7745c5c3_Err != nil {
@@ -633,7 +633,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 				var templ_7745c5c3_Var35 string
 				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(details.Execution.Error)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 549, Col: 130}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 561, Col: 130}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 				if templ_7745c5c3_Err != nil {
@@ -651,7 +651,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 			var templ_7745c5c3_Var36 string
 			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", len(details.History)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 554, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 566, Col: 93}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
@@ -669,7 +669,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 				var templ_7745c5c3_Var37 string
 				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(event.EventType)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 560, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 572, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 				if templ_7745c5c3_Err != nil {
@@ -682,7 +682,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 				var templ_7745c5c3_Var38 string
 				templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(event.Timestamp, 0).Format("15:04:05.000"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 561, Col: 86}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 573, Col: 86}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 				if templ_7745c5c3_Err != nil {
@@ -700,7 +700,7 @@ func WorkflowDetail(details *proto.GetWorkflowDetailsResponse) templ.Component {
 					var templ_7745c5c3_Var39 string
 					templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(event.Details)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 563, Col: 152}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/dashboard/templates/dashboard.templ`, Line: 575, Col: 152}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 					if templ_7745c5c3_Err != nil {

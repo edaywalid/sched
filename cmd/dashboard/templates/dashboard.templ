@@ -394,6 +394,10 @@ templ Index(metrics *proto.WorkflowMetrics, workflows []*proto.WorkflowExecution
 					<label class="form-label" for="workflow-input">Input (JSON or text)</label>
 					<input type="text" id="workflow-input" name="input" class="form-input" placeholder='e.g., "John Doe" or {"key": "value"}'/>
 				</div>
+				<div class="form-group">
+					<label class="form-label" for="workflow-timeout">Execution timeout (seconds, 0 to disable)</label>
+					<input type="number" id="workflow-timeout" name="execution_timeout_seconds" class="form-input" min="0" placeholder="0" value="0"/>
+				</div>
 				<button type="submit" class="start-btn">Start</button>
 			</form>
 			<div id="form-message"></div>
@@ -406,8 +410,16 @@ templ Index(metrics *proto.WorkflowMetrics, workflows []*proto.WorkflowExecution
 		<div class="workflows-section">
 			<div class="section-header">
 				<h2>Workflows</h2>
+				<div class="status-filters" style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+					<button class="refresh-btn" hx-get="/api/workflows-html" hx-target="#workflows-container" hx-swap="innerHTML">All</button>
+					<button class="refresh-btn" hx-get="/api/workflows-html?status=RUNNING" hx-target="#workflows-container" hx-swap="innerHTML">Running</button>
+					<button class="refresh-btn" hx-get="/api/workflows-html?status=COMPLETED" hx-target="#workflows-container" hx-swap="innerHTML">Completed</button>
+					<button class="refresh-btn" hx-get="/api/workflows-html?status=FAILED" hx-target="#workflows-container" hx-swap="innerHTML">Failed</button>
+					<button class="refresh-btn" hx-get="/api/workflows-html?status=TIMED_OUT" hx-target="#workflows-container" hx-swap="innerHTML">Timed out</button>
+					<button class="refresh-btn" hx-get="/api/workflows-html?status=CANCELED" hx-target="#workflows-container" hx-swap="innerHTML">Canceled</button>
+				</div>
 			</div>
-			<div id="workflows-container" hx-get="/api/workflows-html" hx-trigger="refresh" hx-swap="outerHTML">
+			<div id="workflows-container" hx-get="/api/workflows-html" hx-trigger="refresh" hx-swap="innerHTML">
 				@WorkflowList(workflows)
 			</div>
 		</div>
