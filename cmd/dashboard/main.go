@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -170,10 +171,20 @@ func (s *DashboardServer) handleStartWorkflow(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	// Parse optional execution timeout. Invalid or missing values fall
+	// through as 0, which the engine treats as "no timeout".
+	var timeoutSeconds int32
+	if raw := strings.TrimSpace(r.FormValue("execution_timeout_seconds")); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			timeoutSeconds = int32(v)
+		}
+	}
+
 	// Start the workflow
 	resp, err := s.engineClient.StartWorkflow(ctx, &proto.StartWorkflowRequest{
-		WorkflowName: workflowName,
-		Input:        input,
+		WorkflowName:                    workflowName,
+		Input:                           input,
+		WorkflowExecutionTimeoutSeconds: timeoutSeconds,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
