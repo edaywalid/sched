@@ -147,6 +147,10 @@ message PollWorkflowTaskResponse {
   bytes input = 3;
   string workflow_id = 4;
   string run_id = 5;
+  // History is the durable event log for this workflow up to (but not
+  // including) the dispatch of this workflow task. Phase 3.4b will use
+  // this for deterministic replay; today the SDK only logs the length.
+  repeated WorkflowEvent history = 6;
 }
 
 message CompleteWorkflowTaskRequest {

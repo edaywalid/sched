@@ -236,12 +236,32 @@ func (s *EngineServer) PollWorkflowTask(ctx context.Context, req *proto.PollWork
 	}
 	s.mu.Unlock()
 
+	// Read the workflow's history at dispatch time so the worker has
+	// the full event log alongside the task. Phase 3.4b will use this
+	// for deterministic replay; for now it is informational.
+	history, err := s.engine.store.GetHistory(ctx, env.WorkflowID)
+	if err != nil {
+		slog.Warn("fetch history for dispatched workflow task",
+			slog.String("workflow_id", env.WorkflowID),
+			slog.Any("error", err))
+		history = nil
+	}
+	protoHistory := make([]*proto.WorkflowEvent, 0, len(history))
+	for _, ev := range history {
+		protoHistory = append(protoHistory, &proto.WorkflowEvent{
+			EventType: ev.Type,
+			Timestamp: ev.Timestamp.Unix(),
+			Details:   string(ev.Details),
+		})
+	}
+
 	return &proto.PollWorkflowTaskResponse{
 		TaskToken:    taskToken,
 		WorkflowName: env.WorkflowName,
 		Input:        env.Input,
 		WorkflowId:   env.WorkflowID,
 		RunId:        env.RunID,
+		History:      protoHistory,
 	}, nil
 }
 
