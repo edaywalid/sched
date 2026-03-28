@@ -183,7 +183,7 @@ func (c *Client) pollAndExecuteWorkflow(ctx context.Context) error {
 		return nil
 	}
 
-	log.Printf("Received workflow task: %s (ID: %s)", resp.WorkflowName, resp.WorkflowId)
+	log.Printf("Received workflow task: %s (ID: %s, history=%d)", resp.WorkflowName, resp.WorkflowId, len(resp.History))
 
 	  
 	workflow, ok := c.workflows[resp.WorkflowName]
