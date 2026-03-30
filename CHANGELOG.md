@@ -52,6 +52,27 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
+### Added (Phase 5.6 and Phase 3.4a)
+
+- Dashboard: Cancel button on the workflow detail page (only
+  rendered when the workflow status is RUNNING), htmx-posted to a
+  new `/api/cancel-workflow` proxy handler that calls
+  `CancelWorkflow` on the engine.
+- Dashboard: status filter chips above the workflow list for
+  Running, Completed, Failed, Timed out, Canceled, and an All
+  reset. Each chip swaps the inner content of the workflow list
+  container without a full reload.
+- Dashboard: an `execution_timeout_seconds` number input on the
+  start-workflow form that propagates to
+  `WorkflowExecutionTimeoutSeconds` on the StartWorkflow request.
+- Dashboard: lower-case status CSS classes plus dedicated
+  `status-timed_out` and `status-canceled` rules so the new
+  Phase 3.5 states render with the right palette.
+- Phase 3.4a: `PollWorkflowTaskResponse` gains a `history` field.
+  The engine ships the workflow's full durable event log with
+  every workflow task. The SDK logs `history=N` for now; real
+  consumers land in Phase 3.4b.
+
 ### Added (Phase 3.5)
 
 - `StartWorkflowRequest.workflow_execution_timeout_seconds`. When set,
