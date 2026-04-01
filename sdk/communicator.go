@@ -220,6 +220,7 @@ func (c *Client) pollAndExecuteWorkflow(ctx context.Context) error {
 		workflowID: resp.WorkflowId,
 		client:     c,
 		ctx:        wfCtx,
+		replay:     newReplayState(resp.History),
 	}
 
 	result, err := workflow(wfRunCtx, input)
