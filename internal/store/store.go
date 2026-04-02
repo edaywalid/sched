@@ -40,6 +40,7 @@ const (
 	EventWorkflowTimedOut       = "WorkflowTimedOut"
 	EventWorkflowCancelRequested = "WorkflowCancelRequested"
 	EventWorkflowCanceled       = "WorkflowCanceled"
+	EventWorkflowTaskYielded    = "WorkflowTaskYielded"
 )
 
 // Workflow is the durable record of a single workflow execution.

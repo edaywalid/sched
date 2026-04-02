@@ -157,6 +157,11 @@ message CompleteWorkflowTaskRequest {
   string task_token = 1;
   bytes result = 2;
   string error = 3;
+  // Yielded indicates the workflow function paused on a blocking
+  // command (WaitForSignal) without a matching event in history. The
+  // engine should not mark the workflow terminal and will re-dispatch
+  // a new workflow task when relevant history events arrive.
+  bool yielded = 4;
 }
 
 message CompleteWorkflowTaskResponse {

@@ -19,4 +19,5 @@ const (
 	EventTypeWorkflowTimedOut       = store.EventWorkflowTimedOut
 	EventTypeWorkflowCancelRequested = store.EventWorkflowCancelRequested
 	EventTypeWorkflowCanceled       = store.EventWorkflowCanceled
+	EventTypeWorkflowTaskYielded    = store.EventWorkflowTaskYielded
 )
