@@ -223,10 +223,29 @@ func (c *Client) pollAndExecuteWorkflow(ctx context.Context) error {
 		replay:     newReplayState(resp.History),
 	}
 
-	result, err := workflow(wfRunCtx, input)
-	if err != nil {
-		wfSpan.RecordError(err)
-		wfSpan.SetStatus(codes.Error, err.Error())
+	// Run the workflow function with a recover so yields are turned
+	// into controlled completions instead of crashing the worker.
+	var (
+		result  any
+		wfErr   error
+		yielded bool
+	)
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if IsYield(r) {
+					yielded = true
+					log.Printf("Workflow %s yielded; will re-dispatch on event arrival", resp.WorkflowId)
+					return
+				}
+				panic(r)
+			}
+		}()
+		result, wfErr = workflow(wfRunCtx, input)
+	}()
+	if wfErr != nil {
+		wfSpan.RecordError(wfErr)
+		wfSpan.SetStatus(codes.Error, wfErr.Error())
 	}
 	wfSpan.End()
 
@@ -237,20 +256,24 @@ func (c *Client) pollAndExecuteWorkflow(ctx context.Context) error {
 	if result != nil {
 		resultBytes, _ = json.Marshal(result)
 	}
-	if err != nil {
-		errStr = err.Error()
+	if wfErr != nil {
+		errStr = wfErr.Error()
 	}
 
-	_, err = c.client.CompleteWorkflowTask(ctx, &proto.CompleteWorkflowTaskRequest{
+	if _, completeErr := c.client.CompleteWorkflowTask(ctx, &proto.CompleteWorkflowTaskRequest{
 		TaskToken: resp.TaskToken,
 		Result:    resultBytes,
 		Error:     errStr,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to complete workflow: %w", err)
+		Yielded:   yielded,
+	}); completeErr != nil {
+		return fmt.Errorf("failed to complete workflow: %w", completeErr)
 	}
 
-	log.Printf("Completed workflow: %s", resp.WorkflowName)
+	if yielded {
+		log.Printf("Workflow %s task acked as yielded", resp.WorkflowName)
+	} else {
+		log.Printf("Completed workflow: %s", resp.WorkflowName)
+	}
 	return nil
 }
 

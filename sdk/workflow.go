@@ -90,22 +90,10 @@ func (wfCtx *SDKWorkflowContext) WaitForSignal(timeout time.Duration) (string, a
 		return details.SignalName, payload, nil
 	}
 
-	resp, err := wfCtx.client.client.WaitForSignal(wfCtx.ctx, &proto.WaitForSignalRequest{
-		WorkflowId:     wfCtx.workflowID,
-		TimeoutSeconds: int32(timeout / time.Second),
-	})
-	if err != nil {
-		return "", nil, fmt.Errorf("wait for signal: %w", err)
-	}
-	if resp.SignalName == "" {
-		// Server-side wait timed out.
-		return "", nil, nil
-	}
-	var payload any
-	if len(resp.Input) > 0 {
-		if err := json.Unmarshal(resp.Input, &payload); err != nil {
-			return resp.SignalName, nil, fmt.Errorf("decode signal payload: %w", err)
-		}
-	}
-	return resp.SignalName, payload, nil
+	// No history match: yield so the worker can free the slot and the
+	// engine can re-dispatch when SignalReceived eventually lands.
+	// The caller never sees control flow past this point on the first
+	// run; the next run picks up the recorded signal on replay above.
+	_ = timeout // reserved for future per-yield timeout hint
+	panic(yieldErr{command: "WaitForSignal"})
 }

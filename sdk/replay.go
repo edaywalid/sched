@@ -82,3 +82,23 @@ func (r *replayState) advance(idx int) {
 		r.cursor = idx + 1
 	}
 }
+
+// yieldErr is the sentinel value the SDK panics with when a workflow's
+// blocking command (WaitForSignal today, Sleep later) has no matching
+// event in history. The communicator's recover handler treats this
+// panic as a controlled yield: the workflow task completes with
+// yielded=true so the engine knows to re-dispatch when the awaited
+// event arrives.
+type yieldErr struct {
+	command string
+}
+
+func (y yieldErr) Error() string { return "workflow yielded on " + y.command }
+
+// IsYield reports whether r is a yield sentinel. The communicator
+// uses this from a recover() to distinguish a controlled yield from
+// a real panic that should propagate.
+func IsYield(r any) bool {
+	_, ok := r.(yieldErr)
+	return ok
+}
