@@ -275,6 +275,24 @@ func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.Comp
 	delete(s.pendingWfTasks, req.TaskToken)
 	s.mu.Unlock()
 
+	// Yielded: workflow function paused on a blocking command without
+	// a matching history event. Don't transition to a terminal state;
+	// remember the workflow so SignalReceived (and later: timer fire,
+	// activity completion) can re-dispatch a new workflow task.
+	if req.Yielded {
+		_ = s.engine.store.AppendEvent(ctx, store.Event{
+			WorkflowID: pending.WorkflowID,
+			Type:       EventTypeWorkflowTaskYielded,
+		})
+		s.engine.MarkAwaitingDispatch(pending.WorkflowID)
+		if err := s.queue.Ack(ctx, pending.QueueName, pending.AckToken); err != nil {
+			slog.Warn("ack workflow task (yielded)",
+				slog.String("task_token", req.TaskToken),
+				slog.Any("error", err))
+		}
+		return &proto.CompleteWorkflowTaskResponse{Success: true}, nil
+	}
+
 	if req.Error != "" {
 		failed, _ := json.Marshal(map[string]any{"error": req.Error})
 		_ = s.engine.store.AppendEvent(ctx, store.Event{
@@ -611,7 +629,38 @@ func (s *EngineServer) SignalWorkflow(ctx context.Context, req *proto.SignalWork
 		Input: req.Input,
 	})
 
+	// If a yielded workflow is waiting for this signal, enqueue a new
+	// workflow task. The replayed function will see SignalReceived in
+	// history and continue past WaitForSignal.
+	if s.engine.ClaimAwaitingDispatch(req.WorkflowId) {
+		if err := s.redispatchWorkflowTask(ctx, req.WorkflowId); err != nil {
+			slog.Warn("re-dispatch on signal",
+				slog.String("workflow_id", req.WorkflowId),
+				slog.Any("error", err))
+		}
+	}
+
 	return &proto.SignalWorkflowResponse{Success: true}, nil
+}
+
+// redispatchWorkflowTask enqueues a fresh workflow envelope for a
+// workflow that has previously yielded. The worker that picks it up
+// re-runs the workflow function against the now-larger history.
+func (s *EngineServer) redispatchWorkflowTask(ctx context.Context, workflowID string) error {
+	wf, err := s.engine.store.GetWorkflow(ctx, workflowID)
+	if err != nil {
+		return fmt.Errorf("lookup workflow for re-dispatch: %w", err)
+	}
+	envelope, err := json.Marshal(workflowEnvelope{
+		WorkflowID:   wf.WorkflowID,
+		RunID:        wf.RunID,
+		WorkflowName: wf.Name,
+		Input:        wf.Input,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal envelope: %w", err)
+	}
+	return s.queue.Enqueue(ctx, workflowQueueName(defaultTaskQueue), envelope)
 }
 
 func (s *EngineServer) WaitForSignal(ctx context.Context, req *proto.WaitForSignalRequest) (*proto.WaitForSignalResponse, error) {

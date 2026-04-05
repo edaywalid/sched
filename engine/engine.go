@@ -33,16 +33,47 @@ type Engine struct {
 
 	cancelMu        sync.RWMutex
 	cancelRequested map[string]struct{} // workflow_id set
+
+	// awaitingMu guards the set of workflows that have yielded and are
+	// waiting for an external event (currently just SignalReceived).
+	// When such an event lands the engine re-enqueues a workflow task
+	// for the workflow and clears the bit.
+	awaitingMu       sync.Mutex
+	awaitingDispatch map[string]struct{}
 }
 
 func NewEngine(s store.Store) *Engine {
 	return &Engine{
-		store:           s,
-		timerMgr:        NewTimerManager(s),
-		signalQueues:    make(map[string][]*Signal),
-		signalWaiters:   make(map[string][]chan *Signal),
-		cancelRequested: make(map[string]struct{}),
+		store:            s,
+		timerMgr:         NewTimerManager(s),
+		signalQueues:     make(map[string][]*Signal),
+		signalWaiters:    make(map[string][]chan *Signal),
+		cancelRequested:  make(map[string]struct{}),
+		awaitingDispatch: make(map[string]struct{}),
 	}
+}
+
+// MarkAwaitingDispatch records that a workflow has yielded and should
+// have a new workflow task enqueued when relevant history events
+// arrive. Idempotent.
+func (e *Engine) MarkAwaitingDispatch(workflowID string) {
+	e.awaitingMu.Lock()
+	e.awaitingDispatch[workflowID] = struct{}{}
+	e.awaitingMu.Unlock()
+}
+
+// ClaimAwaitingDispatch atomically reports whether the workflow was
+// waiting for a re-dispatch and removes it from the set if so. Used by
+// the signal/activity completion paths to decide whether to enqueue a
+// new workflow task.
+func (e *Engine) ClaimAwaitingDispatch(workflowID string) bool {
+	e.awaitingMu.Lock()
+	defer e.awaitingMu.Unlock()
+	if _, ok := e.awaitingDispatch[workflowID]; ok {
+		delete(e.awaitingDispatch, workflowID)
+		return true
+	}
+	return false
 }
 
 // MarkCancelRequested records that a workflow has been asked to cancel.
