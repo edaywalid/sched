@@ -420,6 +420,83 @@ func TestCancelWorkflow(t *testing.T) {
 	}
 }
 
+// TestYieldAndRedispatch verifies the Phase 3.4c contract: a workflow
+// task completed with Yielded=true leaves the workflow RUNNING, writes
+// a WorkflowTaskYielded event, and a subsequent SignalWorkflow call
+// enqueues a fresh workflow task that the next poll returns with the
+// new SignalReceived event in its history.
+func TestYieldAndRedispatch(t *testing.T) {
+	client, srv, teardown := newTestServer(t)
+	defer teardown()
+	ctx := context.Background()
+
+	startResp, _ := client.StartWorkflow(ctx, &proto.StartWorkflowRequest{
+		WorkflowName: "YieldDemo",
+	})
+
+	first, err := client.PollWorkflowTask(ctx, &proto.PollWorkflowTaskRequest{TaskQueue: "default", TimeoutSeconds: 5})
+	if err != nil || first.TaskToken == "" {
+		t.Fatalf("first PollWorkflowTask: %v %+v", err, first)
+	}
+	// First-run history is just WorkflowStarted.
+	if len(first.History) != 1 || first.History[0].EventType != EventTypeWorkflowStarted {
+		t.Fatalf("first history = %+v, want [WorkflowStarted]", first.History)
+	}
+
+	// Worker reports yielded=true (simulating the SDK panic-recover path).
+	if _, err := client.CompleteWorkflowTask(ctx, &proto.CompleteWorkflowTaskRequest{
+		TaskToken: first.TaskToken,
+		Yielded:   true,
+	}); err != nil {
+		t.Fatalf("CompleteWorkflowTask(yielded=true): %v", err)
+	}
+
+	// Workflow must still be RUNNING.
+	wf, _ := srv.engine.store.GetWorkflow(ctx, startResp.WorkflowId)
+	if wf.Status != store.StatusRunning {
+		t.Fatalf("status after yield = %q, want RUNNING", wf.Status)
+	}
+	hist, _ := srv.engine.store.GetHistory(ctx, startResp.WorkflowId)
+	if !containsEvent(hist, EventTypeWorkflowTaskYielded) {
+		t.Errorf("history missing WorkflowTaskYielded: %v", eventTypes(hist))
+	}
+
+	// Send a signal. The engine should re-enqueue a workflow task.
+	if _, err := client.SignalWorkflow(ctx, &proto.SignalWorkflowRequest{
+		WorkflowId: startResp.WorkflowId,
+		SignalName: "go",
+		Input:      []byte(`"now"`),
+	}); err != nil {
+		t.Fatalf("SignalWorkflow: %v", err)
+	}
+
+	// Second poll returns the re-dispatched task with extended history.
+	second, err := client.PollWorkflowTask(ctx, &proto.PollWorkflowTaskRequest{TaskQueue: "default", TimeoutSeconds: 5})
+	if err != nil || second.TaskToken == "" {
+		t.Fatalf("re-dispatched PollWorkflowTask: %v %+v", err, second)
+	}
+	gotTypes := map[string]int{}
+	for _, ev := range second.History {
+		gotTypes[ev.EventType]++
+	}
+	if gotTypes[EventTypeWorkflowStarted] != 1 || gotTypes[EventTypeWorkflowTaskYielded] != 1 || gotTypes[EventTypeSignalReceived] != 1 {
+		t.Errorf("re-dispatched history counts = %v, want WorkflowStarted+WorkflowTaskYielded+SignalReceived", gotTypes)
+	}
+
+	// Acknowledge the second task as a real completion so we can show
+	// the workflow now reaches a terminal state.
+	if _, err := client.CompleteWorkflowTask(ctx, &proto.CompleteWorkflowTaskRequest{
+		TaskToken: second.TaskToken,
+		Result:    []byte(`"done"`),
+	}); err != nil {
+		t.Fatalf("final CompleteWorkflowTask: %v", err)
+	}
+	wf, _ = srv.engine.store.GetWorkflow(ctx, startResp.WorkflowId)
+	if wf.Status != store.StatusCompleted {
+		t.Fatalf("final status = %q, want COMPLETED", wf.Status)
+	}
+}
+
 func containsEvent(events []store.Event, eventType string) bool {
 	for _, e := range events {
 		if e.Type == eventType {
