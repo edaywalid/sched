@@ -52,6 +52,28 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
+### Added (Phase 3.4b and Phase 3.4c)
+
+- Phase 3.4b: SDK replay-state cursor over the workflow history.
+  QueueActivity scans past the cursor for a matching
+  ActivityScheduled and skips the RPC when found, so workflow
+  re-runs do not duplicate side-effects on the engine.
+  WaitForSignal applies the same pattern against SignalReceived
+  and returns the recorded payload without re-blocking.
+- Phase 3.4c: yield-based replay. CompleteWorkflowTaskRequest
+  grows a `yielded` bool. The SDK panics with a yieldErr
+  sentinel from WaitForSignal when no history match exists; the
+  worker recovers, sets yielded=true on the completion, and frees
+  the slot. The engine writes a WorkflowTaskYielded event, keeps
+  the workflow RUNNING, and remembers the workflow as awaiting
+  dispatch. When SignalWorkflow then lands a SignalReceived
+  event, the engine re-marshals the workflow envelope and
+  enqueues a fresh workflow task. The replayed function picks up
+  the recorded signal via Phase 3.4b's cursor and continues.
+- New event type: `WorkflowTaskYielded`.
+- Engine bufconn test `TestYieldAndRedispatch` covering the full
+  round trip.
+
 ### Added (Phase 5.6 and Phase 3.4a)
 
 - Dashboard: Cancel button on the workflow detail page (only
