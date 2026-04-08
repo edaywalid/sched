@@ -27,6 +27,9 @@ service EngineService {
   rpc CancelWorkflow(CancelWorkflowRequest) returns (CancelWorkflowResponse);
 
   rpc WaitForSignal(WaitForSignalRequest) returns (WaitForSignalResponse);
+
+  rpc RegisterWorkflowTimer(RegisterWorkflowTimerRequest)
+      returns (RegisterWorkflowTimerResponse);
   
   rpc GetWorkflowStatus(GetWorkflowStatusRequest) 
       returns (GetWorkflowStatusResponse);
@@ -124,6 +127,15 @@ message WaitForSignalResponse {
   // Empty signal_name means the wait timed out.
   string signal_name = 1;
   bytes input = 2;
+}
+
+message RegisterWorkflowTimerRequest {
+  string workflow_id = 1;
+  int32 duration_seconds = 2;
+}
+
+message RegisterWorkflowTimerResponse {
+  string timer_id = 1;
 }
 
 message GetWorkflowStatusRequest {
