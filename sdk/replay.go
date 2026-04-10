@@ -74,6 +74,55 @@ func (r *replayState) findSignalReceived() (*proto.WorkflowEvent, int) {
 	return nil, -1
 }
 
+// findTimerScheduled returns the next TimerScheduled event past the
+// cursor along with the timer_id from its details. Used by Sleep
+// during replay: each Sleep call matches sequentially against the
+// next outstanding timer in history.
+func (r *replayState) findTimerScheduled() (*proto.WorkflowEvent, int, string) {
+	if r == nil {
+		return nil, -1, ""
+	}
+	for i := r.cursor; i < len(r.history); i++ {
+		ev := r.history[i]
+		if ev.EventType != "TimerScheduled" {
+			continue
+		}
+		var details struct {
+			TimerID string `json:"timer_id"`
+		}
+		if err := json.Unmarshal([]byte(ev.Details), &details); err != nil {
+			continue
+		}
+		return ev, i, details.TimerID
+	}
+	return nil, -1, ""
+}
+
+// findTimerFired searches the history from fromIdx forward for a
+// TimerFired event whose timer_id matches. Returns (nil, -1) when no
+// matching fire event exists yet.
+func (r *replayState) findTimerFired(timerID string, fromIdx int) (*proto.WorkflowEvent, int) {
+	if r == nil || timerID == "" {
+		return nil, -1
+	}
+	for i := fromIdx + 1; i < len(r.history); i++ {
+		ev := r.history[i]
+		if ev.EventType != "TimerFired" {
+			continue
+		}
+		var details struct {
+			TimerID string `json:"timer_id"`
+		}
+		if err := json.Unmarshal([]byte(ev.Details), &details); err != nil {
+			continue
+		}
+		if details.TimerID == timerID {
+			return ev, i
+		}
+	}
+	return nil, -1
+}
+
 // advance moves the cursor past the given index. The SDK calls this
 // when it matches a recorded event to a current command; future scans
 // start from the new position.

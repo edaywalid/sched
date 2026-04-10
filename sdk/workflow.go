@@ -61,7 +61,34 @@ func (wfCtx *SDKWorkflowContext) QueueActivity(name string, input any) {
 }
 
 func (wfCtx *SDKWorkflowContext) Sleep(duration time.Duration) {
-	time.Sleep(duration)
+	// Replay path. Each Sleep matches the next TimerScheduled in
+	// history past the cursor. If a TimerFired with the same timer_id
+	// is also recorded, the sleep is already done; advance past both
+	// events and return. If only TimerScheduled is recorded (engine
+	// is still waiting for the timer to fire), yield without
+	// re-registering.
+	if sched, schedIdx, timerID := wfCtx.replay.findTimerScheduled(); sched != nil {
+		if fired, firedIdx := wfCtx.replay.findTimerFired(timerID, schedIdx); fired != nil {
+			wfCtx.replay.advance(firedIdx)
+			fmt.Printf("Replay: skipping Sleep (timer %s fired at idx=%d)\n", timerID, firedIdx)
+			return
+		}
+		fmt.Printf("Replay: re-yielding on Sleep (timer %s scheduled but not fired)\n", timerID)
+		panic(yieldErr{command: "Sleep"})
+	}
+
+	// Fresh sleep. Register a durable timer; the engine will write a
+	// TimerScheduled event and arrange for the matching TimerFired to
+	// re-dispatch this workflow task.
+	if _, err := wfCtx.client.client.RegisterWorkflowTimer(wfCtx.ctx, &proto.RegisterWorkflowTimerRequest{
+		WorkflowId:      wfCtx.workflowID,
+		DurationSeconds: int32(duration / time.Second),
+	}); err != nil {
+		fmt.Printf("RegisterWorkflowTimer failed: %v; falling back to local sleep\n", err)
+		time.Sleep(duration)
+		return
+	}
+	panic(yieldErr{command: "Sleep"})
 }
 
 func (wfCtx *SDKWorkflowContext) GetWorkflowID() string {
