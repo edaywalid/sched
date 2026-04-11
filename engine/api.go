@@ -643,6 +643,36 @@ func (s *EngineServer) SignalWorkflow(ctx context.Context, req *proto.SignalWork
 	return &proto.SignalWorkflowResponse{Success: true}, nil
 }
 
+// RegisterWorkflowTimer is the engine-side endpoint for SDK Sleep.
+// The timer is persisted via TimerManager so it survives engine
+// restarts (Phase 2). On fire the callback marks the workflow for
+// re-dispatch (if it yielded) and enqueues a fresh workflow task so
+// the replayed workflow function picks up TimerFired in history.
+func (s *EngineServer) RegisterWorkflowTimer(ctx context.Context, req *proto.RegisterWorkflowTimerRequest) (*proto.RegisterWorkflowTimerResponse, error) {
+	duration := time.Duration(req.DurationSeconds) * time.Second
+	if duration <= 0 {
+		return nil, fmt.Errorf("duration_seconds must be positive, got %d", req.DurationSeconds)
+	}
+
+	workflowID := req.WorkflowId
+	cb := func() {
+		fireCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if s.engine.ClaimAwaitingDispatch(workflowID) {
+			if err := s.redispatchWorkflowTask(fireCtx, workflowID); err != nil {
+				slog.Warn("re-dispatch on timer fire",
+					slog.String("workflow_id", workflowID),
+					slog.Any("error", err))
+			}
+		}
+	}
+	timerID, err := s.engine.timerMgr.ScheduleTimer(ctx, workflowID, duration, cb)
+	if err != nil {
+		return nil, fmt.Errorf("schedule timer: %w", err)
+	}
+	return &proto.RegisterWorkflowTimerResponse{TimerId: timerID}, nil
+}
+
 // redispatchWorkflowTask enqueues a fresh workflow envelope for a
 // workflow that has previously yielded. The worker that picks it up
 // re-runs the workflow function against the now-larger history.
