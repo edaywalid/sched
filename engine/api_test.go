@@ -497,6 +497,83 @@ func TestYieldAndRedispatch(t *testing.T) {
 	}
 }
 
+// TestDurableSleepRedispatch exercises Phase 3.4d. The flow:
+//
+//   StartWorkflow -> Poll returns history=[WorkflowStarted].
+//   Worker calls RegisterWorkflowTimer with a short duration, then
+//   completes the workflow task with yielded=true.
+//   Engine writes TimerScheduled (via TimerManager.ScheduleTimer),
+//   waits for the timer to fire, writes TimerFired, and re-dispatches
+//   the workflow task.
+//   Second Poll returns history with TimerScheduled + TimerFired, so
+//   the replayed SDK Sleep would short-circuit.
+//
+// This test stops short of running the actual SDK Sleep path; it
+// simulates what the worker does via direct gRPC calls.
+func TestDurableSleepRedispatch(t *testing.T) {
+	client, srv, teardown := newTestServer(t)
+	defer teardown()
+	ctx := context.Background()
+
+	startResp, _ := client.StartWorkflow(ctx, &proto.StartWorkflowRequest{
+		WorkflowName: "SleepDemo",
+	})
+
+	first, err := client.PollWorkflowTask(ctx, &proto.PollWorkflowTaskRequest{TaskQueue: "default", TimeoutSeconds: 5})
+	if err != nil || first.TaskToken == "" {
+		t.Fatalf("first PollWorkflowTask: %v %+v", err, first)
+	}
+
+	// Register a 500ms timer, then yield.
+	regResp, err := client.RegisterWorkflowTimer(ctx, &proto.RegisterWorkflowTimerRequest{
+		WorkflowId:      first.WorkflowId,
+		DurationSeconds: 1, // engine accepts seconds; 1s keeps the test fast
+	})
+	if err != nil || regResp.TimerId == "" {
+		t.Fatalf("RegisterWorkflowTimer: %v %+v", err, regResp)
+	}
+	if _, err := client.CompleteWorkflowTask(ctx, &proto.CompleteWorkflowTaskRequest{
+		TaskToken: first.TaskToken,
+		Yielded:   true,
+	}); err != nil {
+		t.Fatalf("CompleteWorkflowTask(yielded=true): %v", err)
+	}
+
+	// Within a couple of seconds the engine should fire the timer and
+	// re-enqueue the workflow task. Poll again with a generous timeout.
+	second, err := client.PollWorkflowTask(ctx, &proto.PollWorkflowTaskRequest{TaskQueue: "default", TimeoutSeconds: 5})
+	if err != nil {
+		t.Fatalf("re-dispatched PollWorkflowTask: %v", err)
+	}
+	if second.TaskToken == "" {
+		t.Fatalf("re-dispatched poll empty (timer did not re-enqueue)")
+	}
+
+	gotTypes := map[string]int{}
+	for _, ev := range second.History {
+		gotTypes[ev.EventType]++
+	}
+	if gotTypes[EventTypeTimerScheduled] != 1 {
+		t.Errorf("TimerScheduled count = %d, want 1 (history: %v)", gotTypes[EventTypeTimerScheduled], second.History)
+	}
+	if gotTypes[EventTypeTimerFired] != 1 {
+		t.Errorf("TimerFired count = %d, want 1 (history: %v)", gotTypes[EventTypeTimerFired], second.History)
+	}
+
+	// Wrap up: complete the second task as terminal so the workflow
+	// reaches COMPLETED.
+	if _, err := client.CompleteWorkflowTask(ctx, &proto.CompleteWorkflowTaskRequest{
+		TaskToken: second.TaskToken,
+		Result:    []byte(`"slept"`),
+	}); err != nil {
+		t.Fatalf("final CompleteWorkflowTask: %v", err)
+	}
+	wf, _ := srv.engine.store.GetWorkflow(ctx, startResp.WorkflowId)
+	if wf.Status != store.StatusCompleted {
+		t.Fatalf("final status = %q, want COMPLETED", wf.Status)
+	}
+}
+
 func containsEvent(events []store.Event, eventType string) bool {
 	for _, e := range events {
 		if e.Type == eventType {
