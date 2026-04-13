@@ -22,7 +22,7 @@ Currently shipping toward production-grade per the
 | Structured logging (slog)             | shipped  | JSON or text, level via env                             |
 | Prometheus metrics                    | shipped  | `/metrics` on the engine                                |
 | golangci-lint and GitHub Actions CI   | shipped  | `make lint`; CI runs build, test, lint with Postgres+Redis services |
-| `Sleep` survives worker crash         | planned  | Phase 3.4d. Foundation in place; same yield pattern, different event type. |
+| `Sleep` survives worker crash         | shipped  | Durable timers + yield + redispatch on `TimerFired` |
 | Workflow queries                      | planned  | Phase 3.4                                               |
 | Sharded engine for HA                 | planned  | Phase 4                                                 |
 | OpenTelemetry tracing                 | shipped  | OTLP/gRPC exporter; otelgrpc interceptors on engine, worker, dashboard; `docker compose --profile tracing up` brings Jaeger up on `:16686` |

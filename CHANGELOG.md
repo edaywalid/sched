@@ -52,6 +52,26 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
+### Added (Phase 3.4d)
+
+- `EngineService.RegisterWorkflowTimer` RPC. The SDK calls it
+  when a workflow function reaches Sleep with no matching
+  `TimerScheduled` + `TimerFired` in history. The engine
+  schedules a durable timer via TimerManager and arranges for
+  the fire callback to re-dispatch the yielded workflow task.
+- `replayState.findTimerScheduled` and
+  `replayState.findTimerFired` plus the matching SDK Sleep path.
+  Sleep now yields instead of blocking on `time.Sleep`, and the
+  re-dispatched run short-circuits via replay.
+- Engine bufconn test `TestDurableSleepRedispatch` covering the
+  RegisterWorkflowTimer plus timer-fire re-dispatch round trip.
+
+End-to-end with MonthlyReport: three `ActivityScheduled`,
+`TimerScheduled`, `WorkflowTaskYielded`, `ActivityCompleted`,
+`TimerFired` cycles followed by `WorkflowCompleted`. Each
+re-dispatch replays the workflow function from scratch, and the
+SDK skips every prior `QueueActivity` and `Sleep` via the cursor.
+
 ### Added (Phase 3.4b and Phase 3.4c)
 
 - Phase 3.4b: SDK replay-state cursor over the workflow history.
