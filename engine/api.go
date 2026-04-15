@@ -53,6 +53,12 @@ type EngineServer struct {
 
 	stopReclaim chan struct{}
 	reclaimWG   sync.WaitGroup
+
+	// serverCtx is cancelled by Close so long-polling Dequeue calls
+	// unblock promptly during graceful shutdown instead of waiting
+	// out their full TimeoutSeconds.
+	serverCtx    context.Context
+	serverCancel context.CancelFunc
 }
 
 // pendingWorkflowTask is the bookkeeping the engine keeps between a
@@ -101,6 +107,7 @@ type activityEnvelope struct {
 }
 
 func NewEngineServer(engine *Engine, q queue.Queue, m *observability.Metrics) *EngineServer {
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &EngineServer{
 		engine:          engine,
 		queue:           q,
@@ -108,21 +115,46 @@ func NewEngineServer(engine *Engine, q queue.Queue, m *observability.Metrics) *E
 		pendingWfTasks:  make(map[string]*pendingWorkflowTask),
 		pendingActTasks: make(map[string]*pendingActivityTask),
 		stopReclaim:     make(chan struct{}),
+		serverCtx:       ctx,
+		serverCancel:    cancel,
 	}
 	s.reclaimWG.Add(1)
 	go s.reclaimLoop()
 	return s
 }
 
-// Close stops the reclaim loop. The underlying queue and store are
-// owned by the caller.
+// Close stops the reclaim loop and cancels the server-lifetime context
+// so long-polling Dequeue calls return promptly during shutdown. The
+// underlying queue and store are owned by the caller.
 func (s *EngineServer) Close() {
+	if s.serverCancel != nil {
+		s.serverCancel()
+	}
 	select {
 	case <-s.stopReclaim:
 	default:
 		close(s.stopReclaim)
 	}
 	s.reclaimWG.Wait()
+}
+
+// pollCtx returns a context that fires either when the per-RPC ctx is
+// done OR the server is shutting down. Used by PollWorkflowTask and
+// PollActivityTask to abandon their Dequeue early on shutdown.
+func (s *EngineServer) pollCtx(rpc context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(rpc)
+	stop := make(chan struct{})
+	go func() {
+		select {
+		case <-s.serverCtx.Done():
+			cancel()
+		case <-stop:
+		}
+	}()
+	return ctx, func() {
+		close(stop)
+		cancel()
+	}
 }
 
 func workflowQueueName(taskQueue string) string {
@@ -209,7 +241,9 @@ func (s *EngineServer) PollWorkflowTask(ctx context.Context, req *proto.PollWork
 		}
 	}()
 
-	msg, err := s.queue.Dequeue(ctx, queueName, timeout)
+	pollC, releasePollCtx := s.pollCtx(ctx)
+	defer releasePollCtx()
+	msg, err := s.queue.Dequeue(pollC, queueName, timeout)
 	if err != nil {
 		return nil, fmt.Errorf("dequeue workflow task: %w", err)
 	}
@@ -426,7 +460,9 @@ func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActi
 		}
 	}()
 
-	msg, err := s.queue.Dequeue(ctx, queueName, timeout)
+	pollC, releasePollCtx := s.pollCtx(ctx)
+	defer releasePollCtx()
+	msg, err := s.queue.Dequeue(pollC, queueName, timeout)
 	if err != nil {
 		return nil, fmt.Errorf("dequeue activity task: %w", err)
 	}
@@ -695,7 +731,9 @@ func (s *EngineServer) redispatchWorkflowTask(ctx context.Context, workflowID st
 
 func (s *EngineServer) WaitForSignal(ctx context.Context, req *proto.WaitForSignalRequest) (*proto.WaitForSignalResponse, error) {
 	timeout := time.Duration(req.TimeoutSeconds) * time.Second
-	sig, err := s.engine.WaitForSignal(ctx, req.WorkflowId, timeout)
+	waitCtx, release := s.pollCtx(ctx)
+	defer release()
+	sig, err := s.engine.WaitForSignal(waitCtx, req.WorkflowId, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -900,20 +938,75 @@ func workflowToProto(w *store.Workflow) *proto.WorkflowExecutionInfo {
 	return info
 }
 
-// StartGRPCServer wires the engine, queue, and metrics into a gRPC
-// server. metrics may be nil in tests; in that case counters are skipped.
-func StartGRPCServer(engine *Engine, q queue.Queue, m *observability.Metrics, address string) error {
+// GRPCServer bundles the gRPC server and the EngineServer it hosts so
+// the binary main can drive a graceful shutdown. Serve runs until the
+// listener returns an error (e.g. GracefulStop is called from another
+// goroutine).
+type GRPCServer struct {
+	grpcServer   *grpc.Server
+	engineServer *EngineServer
+	listener     net.Listener
+}
+
+// NewGRPCServer constructs the gRPC server without starting it.
+// metrics may be nil in tests; in that case counters are skipped.
+func NewGRPCServer(engine *Engine, q queue.Queue, m *observability.Metrics, address string) (*GRPCServer, error) {
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
-		return fmt.Errorf("failed to listen: %w", err)
+		return nil, fmt.Errorf("failed to listen: %w", err)
 	}
-
-	grpcServer := grpc.NewServer(
+	gs := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	)
 	engineServer := NewEngineServer(engine, q, m)
-	proto.RegisterEngineServiceServer(grpcServer, engineServer)
+	proto.RegisterEngineServiceServer(gs, engineServer)
+	return &GRPCServer{grpcServer: gs, engineServer: engineServer, listener: lis}, nil
+}
 
-	slog.Info("engine gRPC server listening", slog.String("addr", address))
-	return grpcServer.Serve(lis)
+// Serve blocks until the listener errors or GracefulStop is called.
+func (s *GRPCServer) Serve() error {
+	slog.Info("engine gRPC server listening", slog.String("addr", s.listener.Addr().String()))
+	return s.grpcServer.Serve(s.listener)
+}
+
+// Stop runs a graceful shutdown:
+//
+//  1. Cancel the EngineServer's serverCtx so any long-polling Dequeue
+//     calls return immediately. Without this step GracefulStop would
+//     sit waiting on workers' 60s long-polls for up to the full
+//     visibility window.
+//  2. Call GracefulStop on the gRPC server. With pollCtx already
+//     cancelled the in-flight RPCs return ASAP and GracefulStop
+//     finishes quickly.
+//  3. If the supplied context expires first, force a hard Stop.
+//  4. Wait for the reclaim loop to finish via EngineServer.Close.
+func (s *GRPCServer) Stop(ctx context.Context) {
+	if s.engineServer.serverCancel != nil {
+		s.engineServer.serverCancel()
+	}
+	done := make(chan struct{})
+	go func() {
+		s.grpcServer.GracefulStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		slog.Info("gRPC server graceful stop complete")
+	case <-ctx.Done():
+		slog.Warn("gRPC graceful stop deadline expired, forcing", slog.Any("error", ctx.Err()))
+		s.grpcServer.Stop()
+	}
+	s.engineServer.Close()
+}
+
+// StartGRPCServer is the legacy entry point that hangs around for
+// tests and existing callers. It builds the server and blocks in
+// Serve until the listener errors. New code should use NewGRPCServer
+// to retain the Stop handle.
+func StartGRPCServer(engine *Engine, q queue.Queue, m *observability.Metrics, address string) error {
+	gs, err := NewGRPCServer(engine, q, m, address)
+	if err != nil {
+		return err
+	}
+	return gs.Serve()
 }
