@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/edaywalid/sched/engine"
 	"github.com/edaywalid/sched/internal/observability"
@@ -13,6 +16,13 @@ import (
 	"github.com/edaywalid/sched/queue"
 	"github.com/joho/godotenv"
 )
+
+// shutdownGracePeriod caps how long graceful stop is allowed to run
+// before the engine forces the gRPC server down and exits. Kept
+// shorter than Docker's default 10s stop grace so `docker stop` works
+// without a custom stop_grace_period. Operators with long-running
+// activities can raise SCHED_SHUTDOWN_GRACE_SECONDS.
+const shutdownGracePeriod = 8 * time.Second
 
 func main() {
 	_ = godotenv.Load()
@@ -62,11 +72,49 @@ func main() {
 	logger.Info("metrics server listening", slog.Int("port", metricsPort))
 
 	engineAddr := fmt.Sprintf(":%s", enginePort)
-	logger.Info("starting gRPC server", slog.String("addr", engineAddr))
-	if err := engine.StartGRPCServer(e, q, metrics, engineAddr); err != nil {
-		logger.Error("gRPC server exited", slog.Any("error", err))
+	gs, err := engine.NewGRPCServer(e, q, metrics, engineAddr)
+	if err != nil {
+		logger.Error("build gRPC server", slog.Any("error", err))
 		os.Exit(1)
 	}
+
+	// Run the gRPC server in a goroutine so the main goroutine can
+	// listen for signals and drive a graceful shutdown.
+	serveErr := make(chan error, 1)
+	go func() {
+		logger.Info("starting gRPC server", slog.String("addr", engineAddr))
+		serveErr <- gs.Serve()
+	}()
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case sig := <-signals:
+		logger.Info("shutdown signal received, draining", slog.String("signal", sig.String()))
+		grace := shutdownGracePeriod
+		if raw := os.Getenv("SCHED_SHUTDOWN_GRACE_SECONDS"); raw != "" {
+			if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+				grace = time.Duration(v) * time.Second
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), grace)
+		gs.Stop(ctx)
+		cancel()
+		e.TimerManager().Stop()
+		// Wait briefly for Serve to return so the listener log line
+		// lands before the process exits.
+		select {
+		case <-serveErr:
+		case <-time.After(time.Second):
+		}
+	case err := <-serveErr:
+		if err != nil {
+			logger.Error("gRPC server exited", slog.Any("error", err))
+			os.Exit(1)
+		}
+	}
+	logger.Info("engine shutdown complete")
 }
 
 func openStore(dsn string) (store.Store, error) {
