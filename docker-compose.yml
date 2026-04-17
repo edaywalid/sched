@@ -76,6 +76,10 @@ services:
       context: .
       dockerfile: Dockerfile.engine
     container_name: sched-engine
+    # Engine drains in 8 seconds; default Docker grace (10s) is fine.
+    # Set explicitly so the value is documented next to the engine
+    # service and not implicit.
+    stop_grace_period: 15s
     ports:
       - "50051:50051"
       - "9090:9090"   # Prometheus /metrics
