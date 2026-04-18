@@ -9,6 +9,14 @@ service EngineService {
   
   rpc PollWorkflowTask(PollWorkflowTaskRequest)
       returns (PollWorkflowTaskResponse);
+
+  // StreamWorkflowTasks is the bidi-streaming alternative to
+  // PollWorkflowTask. The worker sends a Subscribe message on
+  // stream open, then a Ready message after each completed task.
+  // The engine pushes one PollWorkflowTaskResponse per Ready.
+  // CompleteWorkflowTask is still issued as a unary RPC.
+  rpc StreamWorkflowTasks(stream WorkflowStreamClientMessage)
+      returns (stream PollWorkflowTaskResponse);
   
   rpc CompleteWorkflowTask(CompleteWorkflowTaskRequest)
       returns (CompleteWorkflowTaskResponse);
@@ -152,6 +160,19 @@ message PollWorkflowTaskRequest {
   string task_queue = 1;
   int32 timeout_seconds = 2;
 }
+
+message WorkflowStreamClientMessage {
+  oneof body {
+    WorkflowStreamSubscribe subscribe = 1;
+    WorkflowStreamReady ready = 2;
+  }
+}
+
+message WorkflowStreamSubscribe {
+  string task_queue = 1;
+}
+
+message WorkflowStreamReady {}
 
 message PollWorkflowTaskResponse {
   string task_token = 1;
