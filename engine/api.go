@@ -233,7 +233,15 @@ func (s *EngineServer) PollWorkflowTask(ctx context.Context, req *proto.PollWork
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	}
-	queueName := workflowQueueName(req.TaskQueue)
+	return s.dequeueWorkflowTask(ctx, req.TaskQueue, timeout)
+}
+
+// dequeueWorkflowTask is the core dequeue-and-build-response logic
+// shared by the unary PollWorkflowTask and the streaming
+// StreamWorkflowTasks. Returns an empty response with no error on
+// timeout so callers can decide whether to retry.
+func (s *EngineServer) dequeueWorkflowTask(ctx context.Context, taskQueue string, timeout time.Duration) (*proto.PollWorkflowTaskResponse, error) {
+	queueName := workflowQueueName(taskQueue)
 	pollStart := time.Now()
 	defer func() {
 		if s.metrics != nil {
@@ -270,9 +278,6 @@ func (s *EngineServer) PollWorkflowTask(ctx context.Context, req *proto.PollWork
 	}
 	s.mu.Unlock()
 
-	// Read the workflow's history at dispatch time so the worker has
-	// the full event log alongside the task. Phase 3.4b will use this
-	// for deterministic replay; for now it is informational.
 	history, err := s.engine.store.GetHistory(ctx, env.WorkflowID)
 	if err != nil {
 		slog.Warn("fetch history for dispatched workflow task",
@@ -297,6 +302,90 @@ func (s *EngineServer) PollWorkflowTask(ctx context.Context, req *proto.PollWork
 		RunId:        env.RunID,
 		History:      protoHistory,
 	}, nil
+}
+
+// StreamWorkflowTasks is the bidi-streaming counterpart of
+// PollWorkflowTask. Lifecycle:
+//
+//  1. Worker sends a WorkflowStreamSubscribe message with the
+//     task_queue it wants to consume from. The server reads it and
+//     locks in the queue for the lifetime of the stream.
+//  2. After Subscribe, the worker sends one WorkflowStreamReady per
+//     task it is ready to take. The server dequeues a task per Ready
+//     (blocking up to its internal poll timeout if the queue is empty)
+//     and pushes the resulting PollWorkflowTaskResponse down the
+//     stream.
+//  3. The server-side stream lifetime is tied to the worker's stream
+//     and the engine's serverCtx. Either cancelling cleanly tears
+//     everything down.
+//
+// CompleteWorkflowTask remains a unary RPC. The streaming RPC is
+// purely a delivery channel.
+func (s *EngineServer) StreamWorkflowTasks(stream proto.EngineService_StreamWorkflowTasksServer) error {
+	first, err := stream.Recv()
+	if err != nil {
+		return fmt.Errorf("recv subscribe: %w", err)
+	}
+	sub := first.GetSubscribe()
+	if sub == nil {
+		return fmt.Errorf("first stream message must be Subscribe, got %T", first.GetBody())
+	}
+	taskQueue := sub.TaskQueue
+	slog.Info("workflow task stream opened", slog.String("task_queue", taskQueue))
+
+	ctx := stream.Context()
+	for {
+		msg, err := stream.Recv()
+		if err != nil {
+			if ctx.Err() != nil {
+				slog.Info("workflow task stream closed", slog.String("task_queue", taskQueue))
+				return nil
+			}
+			return fmt.Errorf("recv next: %w", err)
+		}
+		if msg.GetReady() == nil {
+			return fmt.Errorf("expected Ready, got %T", msg.GetBody())
+		}
+
+		// Block here until a task arrives or the stream context is
+		// cancelled. The internal 30s timeout caps idle time on an
+		// empty queue so the engine can periodically check
+		// serverCtx for graceful shutdown.
+		resp, err := s.dequeueWorkflowTask(ctx, taskQueue, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("dequeue: %w", err)
+		}
+		if resp.TaskToken == "" {
+			// Idle tick. Wait for the next Ready from the worker.
+			// (We could push an empty message but worker semantics
+			// today are "Send Ready, expect a task" -- if we push
+			// empty the worker would treat it as "no task" and
+			// likely send another Ready immediately, busy-looping.)
+			continue
+		}
+		if err := stream.Send(resp); err != nil {
+			// Re-enqueue the task we just claimed so it does not
+			// get lost. Acking by token is the right shape because
+			// the worker never saw the task token.
+			s.mu.Lock()
+			if pending, ok := s.pendingWfTasks[resp.TaskToken]; ok {
+				delete(s.pendingWfTasks, resp.TaskToken)
+				bg, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = s.queue.Ack(bg, pending.QueueName, pending.AckToken)
+				envelope, marshalErr := json.Marshal(workflowEnvelope{
+					WorkflowID:   pending.WorkflowID,
+					RunID:        pending.RunID,
+					WorkflowName: pending.WorkflowName,
+				})
+				if marshalErr == nil {
+					_ = s.queue.Enqueue(bg, pending.QueueName, envelope)
+				}
+				cancel()
+			}
+			s.mu.Unlock()
+			return fmt.Errorf("stream send: %w", err)
+		}
+	}
 }
 
 func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.CompleteWorkflowTaskRequest) (*proto.CompleteWorkflowTaskResponse, error) {
