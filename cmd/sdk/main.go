@@ -120,12 +120,14 @@ func main() {
 	  
 	autoStartTest := getEnv("AUTO_START_TEST", "false") == "true"
 
+	streaming := getEnv("SCHED_WORKER_STREAMING", "false") == "true"
+
 	if autoStartTest {
 		  
 		log.Println("⚠️  AUTO_START_TEST=true - Starting test workflows (NOT for production!)")
 
 		go func() {
-			if err := client.StartWorker(bgCtx); err != nil {
+			if err := runWorker(bgCtx, client, streaming); err != nil {
 				log.Printf("Worker error: %v", err)
 			}
 		}()
@@ -144,12 +146,22 @@ func main() {
 		  
 		select {}
 	} else {
-		  
-		log.Println("🔧 Worker mode: Ready to execute workflows (use client to start workflows)")
-		if err := client.StartWorker(bgCtx); err != nil {
+		log.Printf("Worker mode (streaming=%v): ready", streaming)
+		if err := runWorker(bgCtx, client, streaming); err != nil {
 			log.Fatalf("Worker failed: %v", err)
 		}
 	}
+}
+
+// runWorker selects between the polling and streaming worker loops
+// based on the SCHED_WORKER_STREAMING env var. Streaming uses the
+// bidi StreamWorkflowTasks RPC introduced in Phase 5.8; polling is
+// the original PollWorkflowTask loop.
+func runWorker(ctx context.Context, client *sdk.Client, streaming bool) error {
+	if streaming {
+		return client.StartStreamingWorker(ctx)
+	}
+	return client.StartWorker(ctx)
 }
 
 func getEnv(key, defaultValue string) string {
