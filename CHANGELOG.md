@@ -52,6 +52,25 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
+### Added (Phase 5.7 and Phase 5.8)
+
+- Phase 5.7: graceful SIGTERM / SIGINT handling in the engine.
+  `engine.NewGRPCServer` exposes Serve and Stop so cmd/engine
+  can drive a bounded shutdown. The drain cancels long-polling
+  Dequeue calls via a server-lifetime context, runs
+  GracefulStop, then force-stops after an 8 second deadline.
+  `SCHED_SHUTDOWN_GRACE_SECONDS` overrides the deadline. Docker
+  Compose declares a 15 second stop_grace_period so docker stop
+  works without the operator setting it.
+- Phase 5.8: bidi streaming for workflow task dispatch. New
+  `StreamWorkflowTasks` RPC carries a oneof Subscribe / Ready
+  client message and a stream of PollWorkflowTaskResponse from
+  the server. SDK `Client.StartStreamingWorker` opens the stream
+  and replaces the 60s long-poll round trip with a single
+  long-lived stream plus per-task Ready credits. Workers opt in
+  via `SCHED_WORKER_STREAMING=true`; activities still use the
+  polling path until a matching streaming RPC lands.
+
 ### Added (Phase 3.4d)
 
 - `EngineService.RegisterWorkflowTimer` RPC. The SDK calls it
