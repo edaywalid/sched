@@ -29,6 +29,12 @@ service EngineService {
   
   rpc PollActivityTask(PollActivityTaskRequest)
       returns (PollActivityTaskResponse);
+
+  // StreamActivityTasks is the bidi-streaming counterpart of
+  // PollActivityTask. Same shape as StreamWorkflowTasks: Subscribe
+  // on open, then one Ready per task the worker can accept.
+  rpc StreamActivityTasks(stream ActivityStreamClientMessage)
+      returns (stream PollActivityTaskResponse);
   
   rpc SignalWorkflow(SignalWorkflowRequest) returns (SignalWorkflowResponse);
 
@@ -99,6 +105,19 @@ message PollActivityTaskRequest {
   string task_queue = 1;
   int32 timeout_seconds = 2;
 }
+
+message ActivityStreamClientMessage {
+  oneof body {
+    ActivityStreamSubscribe subscribe = 1;
+    ActivityStreamReady ready = 2;
+  }
+}
+
+message ActivityStreamSubscribe {
+  string task_queue = 1;
+}
+
+message ActivityStreamReady {}
 
 message PollActivityTaskResponse {
   string task_token = 1;
