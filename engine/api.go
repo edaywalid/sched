@@ -541,7 +541,13 @@ func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActi
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	}
-	queueName := activityQueueName(req.TaskQueue)
+	return s.dequeueActivityTask(ctx, req.TaskQueue, timeout)
+}
+
+// dequeueActivityTask is the shared core for PollActivityTask and the
+// streaming StreamActivityTasks. Mirrors dequeueWorkflowTask.
+func (s *EngineServer) dequeueActivityTask(ctx context.Context, taskQueue string, timeout time.Duration) (*proto.PollActivityTaskResponse, error) {
+	queueName := activityQueueName(taskQueue)
 	pollStart := time.Now()
 	defer func() {
 		if s.metrics != nil {
@@ -587,6 +593,68 @@ func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActi
 		Input:        env.Input,
 		WorkflowId:   env.WorkflowID,
 	}, nil
+}
+
+// StreamActivityTasks is the bidi streaming counterpart of
+// PollActivityTask. Same lifecycle as StreamWorkflowTasks: one
+// Subscribe on open, one Ready per task the worker can take.
+func (s *EngineServer) StreamActivityTasks(stream proto.EngineService_StreamActivityTasksServer) error {
+	first, err := stream.Recv()
+	if err != nil {
+		return fmt.Errorf("recv subscribe: %w", err)
+	}
+	sub := first.GetSubscribe()
+	if sub == nil {
+		return fmt.Errorf("first stream message must be Subscribe, got %T", first.GetBody())
+	}
+	taskQueue := sub.TaskQueue
+	slog.Info("activity task stream opened", slog.String("task_queue", taskQueue))
+
+	ctx := stream.Context()
+	for {
+		msg, err := stream.Recv()
+		if err != nil {
+			if ctx.Err() != nil {
+				slog.Info("activity task stream closed", slog.String("task_queue", taskQueue))
+				return nil
+			}
+			return fmt.Errorf("recv next: %w", err)
+		}
+		if msg.GetReady() == nil {
+			return fmt.Errorf("expected Ready, got %T", msg.GetBody())
+		}
+
+		resp, err := s.dequeueActivityTask(ctx, taskQueue, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("dequeue: %w", err)
+		}
+		if resp.TaskToken == "" {
+			continue
+		}
+		if err := stream.Send(resp); err != nil {
+			// Re-enqueue the task we claimed so it is not lost.
+			s.mu.Lock()
+			if pending, ok := s.pendingActTasks[resp.TaskToken]; ok {
+				delete(s.pendingActTasks, resp.TaskToken)
+				bg, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = s.queue.Ack(bg, pending.QueueName, pending.AckToken)
+				envelope, marshalErr := json.Marshal(activityEnvelope{
+					WorkflowID:   pending.WorkflowID,
+					ActivityName: pending.ActivityName,
+					Input:        pending.Input,
+					Attempt:      pending.Attempt,
+					MaxAttempts:  pending.MaxAttempts,
+					Policy:       pending.Policy,
+				})
+				if marshalErr == nil {
+					_ = s.queue.Enqueue(bg, pending.QueueName, envelope)
+				}
+				cancel()
+			}
+			s.mu.Unlock()
+			return fmt.Errorf("stream send: %w", err)
+		}
+	}
 }
 
 func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.CompleteActivityRequest) (*proto.CompleteActivityResponse, error) {
