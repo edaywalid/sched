@@ -127,10 +127,10 @@ func (c *Client) SignalWorkflow(ctx context.Context, workflowID, signalName stri
 
   
 // StartStreamingWorker is the bidi-stream alternative to StartWorker.
-// One goroutine maintains a StreamWorkflowTasks stream for workflow
-// task delivery; activities still use the polling path until a
-// matching streaming RPC lands. Returns when the context is cancelled
-// or the stream errors past the auto-reconnect loop.
+// Both workflow and activity tasks come over their own long-lived
+// streams; only CompleteWorkflowTask / CompleteActivity stay unary.
+// Returns when the context is cancelled or either stream errors past
+// the auto-reconnect loop.
 func (c *Client) StartStreamingWorker(ctx context.Context) error {
 	log.Printf("Starting streaming worker, task queue: %s", c.taskQueue)
 	errCh := make(chan error, 2)
@@ -139,20 +139,75 @@ func (c *Client) StartStreamingWorker(ctx context.Context) error {
 		errCh <- c.streamWorkflowTasksLoop(ctx)
 	}()
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				errCh <- ctx.Err()
-				return
-			default:
-				if err := c.pollAndExecuteActivity(ctx); err != nil {
-					log.Printf("Error polling activity: %v", err)
-					time.Sleep(time.Second)
-				}
-			}
-		}
+		errCh <- c.streamActivityTasksLoop(ctx)
 	}()
 	return <-errCh
+}
+
+// streamActivityTasksLoop mirrors streamWorkflowTasksLoop for the
+// activity stream.
+func (c *Client) streamActivityTasksLoop(ctx context.Context) error {
+	for {
+		if err := c.runActivityStream(ctx); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			log.Printf("Activity stream ended: %v; reconnecting in 1s", err)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Second):
+			}
+			continue
+		}
+	}
+}
+
+func (c *Client) runActivityStream(ctx context.Context) error {
+	stream, err := c.client.StreamActivityTasks(ctx)
+	if err != nil {
+		return fmt.Errorf("open stream: %w", err)
+	}
+	if err := stream.Send(&proto.ActivityStreamClientMessage{
+		Body: &proto.ActivityStreamClientMessage_Subscribe{
+			Subscribe: &proto.ActivityStreamSubscribe{TaskQueue: c.taskQueue},
+		},
+	}); err != nil {
+		return fmt.Errorf("send subscribe: %w", err)
+	}
+	if err := c.sendActivityStreamReady(stream); err != nil {
+		return err
+	}
+
+	for {
+		resp, err := stream.Recv()
+		if err != nil {
+			return fmt.Errorf("stream recv: %w", err)
+		}
+		if resp.TaskToken == "" {
+			if err := c.sendActivityStreamReady(stream); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := c.executeActivityTask(ctx, resp); err != nil {
+			log.Printf("Error executing streamed activity task: %v", err)
+		}
+		if err := c.sendActivityStreamReady(stream); err != nil {
+			return err
+		}
+	}
+}
+
+func (c *Client) sendActivityStreamReady(stream proto.EngineService_StreamActivityTasksClient) error {
+	if err := stream.Send(&proto.ActivityStreamClientMessage{
+		Body: &proto.ActivityStreamClientMessage_Ready{
+			Ready: &proto.ActivityStreamReady{},
+		},
+	}); err != nil {
+		return fmt.Errorf("send ready: %w", err)
+	}
+	return nil
 }
 
 // streamWorkflowTasksLoop keeps a StreamWorkflowTasks stream open. On
@@ -383,11 +438,16 @@ func (c *Client) pollAndExecuteActivity(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to poll activity task: %w", err)
 	}
-
 	if resp.TaskToken == "" {
 		return nil
 	}
+	return c.executeActivityTask(ctx, resp)
+}
 
+// executeActivityTask runs the registered activity for the dispatched
+// task and reports completion. Shared by the polling and streaming
+// activity worker paths.
+func (c *Client) executeActivityTask(ctx context.Context, resp *proto.PollActivityTaskResponse) error {
 	log.Printf("Received activity task: %s (workflow: %s)", resp.ActivityName, resp.WorkflowId)
 
 	activity, ok := c.activities[resp.ActivityName]
