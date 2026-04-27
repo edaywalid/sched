@@ -24,6 +24,7 @@ Currently shipping toward production-grade per the
 | golangci-lint and GitHub Actions CI   | shipped  | `make lint`; CI runs build, test, lint with Postgres+Redis services |
 | Graceful SIGTERM in the engine        | shipped  | Cancels long-polls and drains in 8s; bumped via `SCHED_SHUTDOWN_GRACE_SECONDS` |
 | Bidi-streamed workflow task dispatch  | shipped  | `StreamWorkflowTasks` RPC; workers opt-in with `SCHED_WORKER_STREAMING=true` |
+| Bidi-streamed activity task dispatch  | shipped  | `StreamActivityTasks` RPC; same opt-in env var, both streams in parallel |
 | `Sleep` survives worker crash         | shipped  | Durable timers + yield + redispatch on `TimerFired` |
 | Workflow queries                      | planned  | Phase 3.4                                               |
 | Sharded engine for HA                 | planned  | Phase 4                                                 |

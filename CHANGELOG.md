@@ -52,6 +52,20 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
+### Added (Phase 5.8b)
+
+- `EngineService.StreamActivityTasks` RPC. Mirrors
+  `StreamWorkflowTasks` for activity task dispatch. SDK
+  `Client.StartStreamingWorker` now opens both streams in
+  parallel, so a worker started with `SCHED_WORKER_STREAMING=true`
+  uses bidi streaming for every task type. `CompleteActivity`
+  stays unary so retry counters and visibility-timeout
+  bookkeeping continue to work exactly as before.
+- Engine re-enqueue path on Send failure preserves the original
+  envelope's Attempt, MaxAttempts, and RetryPolicy so retries
+  resume from the right attempt number even after a stream
+  drop.
+
 ### Added (Phase 5.7 and Phase 5.8)
 
 - Phase 5.7: graceful SIGTERM / SIGINT handling in the engine.
