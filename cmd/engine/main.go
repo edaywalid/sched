@@ -24,6 +24,13 @@ import (
 // activities can raise SCHED_SHUTDOWN_GRACE_SECONDS.
 const shutdownGracePeriod = 8 * time.Second
 
+// defaultLeaderLockKey is the pg_advisory_lock key used to elect a
+// single active engine across replicas. The value is arbitrary; what
+// matters is that every engine in the cluster uses the same number.
+// Operators can override via SCHED_LEADER_LOCK_KEY for multi-tenant
+// deployments that share a Postgres instance.
+const defaultLeaderLockKey int64 = 0x53636845644c6431 // "SchEdLd1"
+
 func main() {
 	_ = godotenv.Load()
 	logger := observability.NewLogger("engine")
@@ -51,6 +58,28 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = q.Close() }()
+
+	// Leader election. When the engine has a Postgres store we hold
+	// an advisory lock for the lifetime of leadership. In-memory mode
+	// (no DSN) is single-process by definition so we skip.
+	var lease *store.LeaderLease
+	if pg, ok := s.(*store.PostgresStore); ok {
+		lockKey := defaultLeaderLockKey
+		if raw := os.Getenv("SCHED_LEADER_LOCK_KEY"); raw != "" {
+			if v, err := strconv.ParseInt(raw, 0, 64); err == nil {
+				lockKey = v
+			}
+		}
+		logger.Info("waiting for leader lease", slog.Int64("lock_key", lockKey))
+		l, err := store.AcquireLeaderLease(context.Background(), pg.Pool(), lockKey, 5*time.Second)
+		if err != nil {
+			logger.Error("acquire leader lease", slog.Any("error", err))
+			os.Exit(1)
+		}
+		lease = l
+		logger.Info("became leader")
+		defer lease.Release(context.Background())
+	}
 
 	e := engine.NewEngine(s)
 	metrics := observability.NewMetrics()
@@ -89,9 +118,16 @@ func main() {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	select {
-	case sig := <-signals:
-		logger.Info("shutdown signal received, draining", slog.String("signal", sig.String()))
+	// leaseLost is the channel that closes when the leader lease is
+	// dropped. When that happens we treat it as a shutdown signal so
+	// another engine can pick up leadership.
+	var leaseLost <-chan struct{}
+	if lease != nil {
+		leaseLost = lease.Lost()
+	}
+
+	drain := func(reason string) {
+		logger.Info("draining", slog.String("reason", reason))
 		grace := shutdownGracePeriod
 		if raw := os.Getenv("SCHED_SHUTDOWN_GRACE_SECONDS"); raw != "" {
 			if v, err := strconv.Atoi(raw); err == nil && v > 0 {
@@ -102,12 +138,19 @@ func main() {
 		gs.Stop(ctx)
 		cancel()
 		e.TimerManager().Stop()
-		// Wait briefly for Serve to return so the listener log line
-		// lands before the process exits.
 		select {
 		case <-serveErr:
 		case <-time.After(time.Second):
 		}
+	}
+
+	select {
+	case sig := <-signals:
+		drain("signal=" + sig.String())
+	case <-leaseLost:
+		logger.Warn("leader lease lost, shutting down so another engine can take over")
+		drain("lease_lost")
+		os.Exit(1)
 	case err := <-serveErr:
 		if err != nil {
 			logger.Error("gRPC server exited", slog.Any("error", err))
