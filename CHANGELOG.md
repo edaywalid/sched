@@ -52,6 +52,24 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
+### Added (Phase 4.a)
+
+- `store.LeaderLease` backed by `pg_try_advisory_lock` on a
+  dedicated pgx connection. `AcquireLeaderLease` blocks until
+  the lock is acquired, polling every `retryEvery` (default 5s)
+  in between. `Lost()` exposes a channel that closes when the
+  underlying connection drops or Release is called.
+- `cmd/engine` waits for the lease before starting the gRPC
+  server when the store is Postgres-backed; in-memory mode skips
+  election. The main loop exits with status 1 on lease loss so
+  another engine can take over. `SCHED_LEADER_LOCK_KEY` overrides
+  the default lock key for multi-tenant Postgres.
+
+End-to-end verification with two engine containers pointed at
+the same Postgres: only one logs `became leader`, the other
+loops on `waiting for leader lease`. Stop the leader and the
+standby takes over within the retry interval.
+
 ### Added (Phase 5.8b)
 
 - `EngineService.StreamActivityTasks` RPC. Mirrors

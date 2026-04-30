@@ -25,9 +25,10 @@ Currently shipping toward production-grade per the
 | Graceful SIGTERM in the engine        | shipped  | Cancels long-polls and drains in 8s; bumped via `SCHED_SHUTDOWN_GRACE_SECONDS` |
 | Bidi-streamed workflow task dispatch  | shipped  | `StreamWorkflowTasks` RPC; workers opt-in with `SCHED_WORKER_STREAMING=true` |
 | Bidi-streamed activity task dispatch  | shipped  | `StreamActivityTasks` RPC; same opt-in env var, both streams in parallel |
+| Active-passive HA via leader election | shipped  | Postgres advisory lock; standby takes over within the retry interval |
 | `Sleep` survives worker crash         | shipped  | Durable timers + yield + redispatch on `TimerFired` |
 | Workflow queries                      | planned  | Phase 3.4                                               |
-| Sharded engine for HA                 | planned  | Phase 4                                                 |
+| Sharded engine for HA                 | planned  | Phase 4.b. Active-passive shipped via leader election; sharded ownership next |
 | OpenTelemetry tracing                 | shipped  | OTLP/gRPC exporter; otelgrpc interceptors on engine, worker, dashboard; `docker compose --profile tracing up` brings Jaeger up on `:16686` |
 
 ## Architecture
