@@ -230,22 +230,43 @@ func (s *DashboardServer) handleCancelWorkflow(w http.ResponseWriter, r *http.Re
 }
 
 func (s *DashboardServer) Start(address string) error {
-	// Routes
-	http.HandleFunc("/", s.handleIndex)
-	http.HandleFunc("/api/metrics-html", s.handleMetricsHTML)
-	http.HandleFunc("/api/workflows-html", s.handleWorkflowsHTML)
-	http.HandleFunc("/api/start-workflow", s.handleStartWorkflow)
-	http.HandleFunc("/api/cancel-workflow", s.handleCancelWorkflow)
-	http.HandleFunc("/workflow/", s.handleWorkflowDetail)
+	mux := http.NewServeMux()
 
-	// Health check
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/api/metrics-html", s.handleMetricsHTML)
+	mux.HandleFunc("/api/workflows-html", s.handleWorkflowsHTML)
+	mux.HandleFunc("/api/start-workflow", s.handleStartWorkflow)
+	mux.HandleFunc("/api/cancel-workflow", s.handleCancelWorkflow)
+	mux.HandleFunc("/workflow/", s.handleWorkflowDetail)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "OK")
+		_, _ = fmt.Fprint(w, "OK")
 	})
 
+	s.registerAPI(mux)
+
+	handler := withCORS(mux)
 	log.Printf("Dashboard server starting on %s", address)
-	return http.ListenAndServe(address, nil)
+	return http.ListenAndServe(address, handler)
+}
+
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Vary", "Origin")
+		}
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+			w.Header().Set("Access-Control-Max-Age", "600")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func main() {
