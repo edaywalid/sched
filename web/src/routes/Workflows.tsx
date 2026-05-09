@@ -5,6 +5,8 @@ import { api } from "../api/client";
 import type { WorkflowStatus, WorkflowSummary } from "../api/types";
 import { StatusBadge } from "../components/StatusBadge";
 import { RelativeTime } from "../components/RelativeTime";
+import { MetricsCards } from "../components/MetricsCards";
+import { StartWorkflowForm } from "../components/StartWorkflowForm";
 
 const STATUS_TABS: Array<{ label: string; value: WorkflowStatus | "ALL" }> = [
   { label: "All", value: "ALL" },
@@ -25,14 +27,15 @@ export function WorkflowsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-medium text-zinc-100">Workflows</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Recent runs across every queue.
-          </p>
-        </div>
+      <header>
+        <h1 className="text-xl font-medium text-zinc-100">Workflows</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          Recent runs across every queue.
+        </p>
       </header>
+
+      <MetricsCards />
+      <StartWorkflowForm />
 
       <div className="flex flex-wrap gap-1">
         {STATUS_TABS.map((tab) => (
