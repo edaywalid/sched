@@ -2,16 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
-	"strings"
-	"time"
 
-	"github.com/edaywalid/sched/cmd/dashboard/templates"
 	"github.com/edaywalid/sched/internal/observability"
 	"github.com/edaywalid/sched/proto"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -25,9 +20,6 @@ type DashboardServer struct {
 }
 
 func NewDashboardServer(engineAddress string) (*DashboardServer, error) {
-	// Connect to engine via gRPC. The otelgrpc client handler propagates
-	// trace context so a span started in the dashboard request handler
-	// shows up as the parent of the engine-side span.
 	conn, err := grpc.NewClient(engineAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
@@ -35,11 +27,8 @@ func NewDashboardServer(engineAddress string) (*DashboardServer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to engine: %w", err)
 	}
-
-	client := proto.NewEngineServiceClient(conn)
-
 	return &DashboardServer{
-		engineClient: client,
+		engineClient: proto.NewEngineServiceClient(conn),
 		conn:         conn,
 	}, nil
 }
@@ -50,200 +39,15 @@ func (s *DashboardServer) Close() {
 	}
 }
 
-// Handlers using templ
-
-func (s *DashboardServer) handleIndex(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Fetch workflows and metrics
-	workflowsResp, err := s.engineClient.ListWorkflows(ctx, &proto.ListWorkflowsRequest{})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to fetch workflows: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	metricsResp, err := s.engineClient.GetWorkflowMetrics(ctx, &proto.GetWorkflowMetricsRequest{})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to fetch metrics: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Render with templ
-	component := templates.Index(metricsResp.Metrics, workflowsResp.Workflows)
-	_ = component.Render(ctx, w)
-}
-
-func (s *DashboardServer) handleMetricsHTML(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	metricsResp, err := s.engineClient.GetWorkflowMetrics(ctx, &proto.GetWorkflowMetricsRequest{})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to fetch metrics: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	component := templates.MetricsGrid(metricsResp.Metrics)
-	_ = component.Render(ctx, w)
-}
-
-func (s *DashboardServer) handleWorkflowsHTML(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	statusFilter := r.URL.Query().Get("status")
-
-	workflowsResp, err := s.engineClient.ListWorkflows(ctx, &proto.ListWorkflowsRequest{
-		StatusFilter: statusFilter,
-	})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to fetch workflows: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	component := templates.WorkflowList(workflowsResp.Workflows)
-	_ = component.Render(ctx, w)
-}
-
-func (s *DashboardServer) handleWorkflowDetail(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	workflowID := r.URL.Path[len("/workflow/"):]
-	if workflowID == "" {
-		http.Error(w, "Missing workflow ID", http.StatusBadRequest)
-		return
-	}
-
-	detailsResp, err := s.engineClient.GetWorkflowDetails(ctx, &proto.GetWorkflowDetailsRequest{
-		WorkflowId: workflowID,
-	})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to fetch workflow details: %v", err), http.StatusNotFound)
-		return
-	}
-
-	component := templates.WorkflowDetail(detailsResp)
-	_ = component.Render(ctx, w)
-}
-
-func (s *DashboardServer) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Parse form data
-	if err := r.ParseForm(); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `<div class="error-message">Invalid form data: %v</div>`, err)
-		return
-	}
-
-	workflowName := strings.TrimSpace(r.FormValue("workflow_name"))
-	inputStr := strings.TrimSpace(r.FormValue("input"))
-
-	if workflowName == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, `<div class="error-message">Workflow name is required</div>`)
-		return
-	}
-
-	// Parse input - try JSON first, if fails use as plain string
-	var input []byte
-	if inputStr != "" {
-		// Check if it looks like JSON
-		if strings.HasPrefix(inputStr, "{") || strings.HasPrefix(inputStr, "[") {
-			var jsonObj interface{}
-			if err := json.Unmarshal([]byte(inputStr), &jsonObj); err != nil {
-				// Not valid JSON, wrap as string
-				input, _ = json.Marshal(inputStr)
-			} else {
-				input = []byte(inputStr)
-			}
-		} else {
-			// Plain string, wrap in JSON
-			input, _ = json.Marshal(inputStr)
-		}
-	}
-
-	// Parse optional execution timeout. Invalid or missing values fall
-	// through as 0, which the engine treats as "no timeout".
-	var timeoutSeconds int32
-	if raw := strings.TrimSpace(r.FormValue("execution_timeout_seconds")); raw != "" {
-		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
-			timeoutSeconds = int32(v)
-		}
-	}
-
-	// Start the workflow
-	resp, err := s.engineClient.StartWorkflow(ctx, &proto.StartWorkflowRequest{
-		WorkflowName:                    workflowName,
-		Input:                           input,
-		WorkflowExecutionTimeoutSeconds: timeoutSeconds,
-	})
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, `<div class="error-message">Failed to start workflow: %v</div>`, err)
-		return
-	}
-
-	// Return success message
-	fmt.Fprintf(w, `<div class="success-message">Workflow started successfully! ID: %s</div>`, resp.WorkflowId)
-
-	// Trigger refresh of workflows list
-	w.Header().Set("HX-Trigger", "refresh")
-}
-
-func (s *DashboardServer) handleCancelWorkflow(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	workflowID := r.URL.Query().Get("id")
-	if workflowID == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, `<div class="error-message">Missing workflow id</div>`)
-		return
-	}
-	reason := r.URL.Query().Get("reason")
-	if reason == "" {
-		reason = "cancelled from dashboard"
-	}
-
-	if _, err := s.engineClient.CancelWorkflow(ctx, &proto.CancelWorkflowRequest{
-		WorkflowId: workflowID,
-		Reason:     reason,
-	}); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, `<div class="error-message">Cancel failed: %v</div>`, err)
-		return
-	}
-	fmt.Fprint(w, `<span style="color:#388E3C;font-weight:600;">Cancel requested</span>`)
-}
-
 func (s *DashboardServer) Start(address string) error {
 	mux := http.NewServeMux()
-
-	mux.HandleFunc("/", s.handleIndex)
-	mux.HandleFunc("/api/metrics-html", s.handleMetricsHTML)
-	mux.HandleFunc("/api/workflows-html", s.handleWorkflowsHTML)
-	mux.HandleFunc("/api/start-workflow", s.handleStartWorkflow)
-	mux.HandleFunc("/api/cancel-workflow", s.handleCancelWorkflow)
-	mux.HandleFunc("/workflow/", s.handleWorkflowDetail)
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "OK")
-	})
-
 	s.registerAPI(mux)
+
+	if static, ok := webFS(); ok {
+		mux.HandleFunc("/", spaHandler(static))
+	} else {
+		mux.HandleFunc("/", placeholderHandler())
+	}
 
 	handler := withCORS(mux)
 	log.Printf("Dashboard server starting on %s", address)
