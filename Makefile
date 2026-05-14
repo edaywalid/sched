@@ -1,4 +1,4 @@
-.PHONY: help build up down logs restart clean test proto migrate-up migrate-down migrate-new sqlc-gen lint
+.PHONY: help build up down logs restart clean test proto migrate-up migrate-down migrate-new sqlc-gen lint web-build web-dev
 
 # Default Postgres DSN for local migrations (mirrors docker-compose.yml).
 POSTGRES_DSN ?= postgres://sched:sched_password@localhost:5432/sched?sslmode=disable
@@ -163,6 +163,20 @@ migrate-new:
 # Regenerate sqlc query bindings under internal/store/db/.
 sqlc-gen:
 	cd internal/store && sqlc generate
+
+# Build the React dashboard and copy the dist into the path the Go
+# binary embeds. Run before `make build` or `make build-local`. The
+# .gitignore and .gitkeep in web_dist are preserved so a clean
+# checkout still has the directory and the placeholder embed works.
+web-build:
+	cd web && pnpm install --frozen-lockfile && pnpm build
+	find cmd/dashboard/web_dist -mindepth 1 -not -name .gitignore -not -name .gitkeep -delete
+	cp -R web/dist/. cmd/dashboard/web_dist/
+
+# Run the Vite dev server. The Go dashboard binary must also be
+# running on :8080 so the proxy can reach the JSON API.
+web-dev:
+	cd web && pnpm install && pnpm dev
 
 # Run golangci-lint against the whole module. Installs the linter on
 # first use if it is not already on PATH.
