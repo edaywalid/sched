@@ -52,6 +52,40 @@ across the engine. Prometheus metrics are exposed on `/metrics`.
   with promauto, and starts `/metrics` on port 9090 alongside the
   gRPC server.
 
+### Added (Phase 6)
+
+- New top-level `web/` directory holding the React 19 dashboard
+  and landing page. Vite 6 + Tailwind v4 + TanStack Query +
+  react-router 7. Theme is dark by default with one muted
+  accent; no decorative gradients.
+- Landing page at `/` (project pitch, SDK example, capability
+  grid, footer).
+- Dashboard at `/app`: workflows list with status filter chips
+  and 4-second polling, a four-counter metrics strip, an
+  inline start-workflow form. Workflow detail at
+  `/app/workflows/:id` with a vertical history timeline, a
+  Cancel button for RUNNING workflows, and meta cells for run
+  id, start time, duration.
+- `cmd/dashboard/api.go`: JSON API the React app calls (list
+  workflows with status/limit, get workflow details + history,
+  start workflow, cancel workflow, metrics, health). Camel
+  case fields, millisecond timestamps.
+- `cmd/dashboard/static.go`: embeds the Vite build with
+  go:embed and serves it from `/`; falls back to a placeholder
+  embed when the bundle is missing so a clean checkout still
+  responds. SPA paths fall through to index.html for
+  client-side routing.
+- `make web-build` and `make web-dev` targets.
+  `Dockerfile.dashboard` builds the React bundle in a node
+  stage before compiling the Go binary.
+
+### Removed (Phase 6)
+
+- The templ-based dashboard (`cmd/dashboard/templates/` and the
+  HTML-returning handlers in main.go). All capabilities have
+  parity in the React app.
+- `github.com/a-h/templ` from go.mod.
+
 ### Added (Phase 4.a)
 
 - `store.LeaderLease` backed by `pg_try_advisory_lock` on a

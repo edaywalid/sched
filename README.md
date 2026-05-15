@@ -10,7 +10,7 @@ Currently shipping toward production-grade per the
 | ------------------------------------- | -------- | ------------------------------------------------------- |
 | Workflow and activity execution       | shipped  | Single engine, gRPC SDK                                 |
 | Workflow state persistence            | shipped  | PostgreSQL via pgx/v5 and sqlc, event-sourced history   |
-| Web dashboard                         | shipped  | templ and htmx, served by the dashboard service         |
+| Web dashboard + landing page          | shipped  | React 19 + Vite + Tailwind v4 SPA, embedded in the Go dashboard binary |
 | Distributed task queue                | shipped  | Redis Streams, consumer groups, reclaim                 |
 | Durable timer rows                    | shipped  | Persisted in Postgres, recovered on engine boot         |
 | Activity retries (exponential)        | shipped  | `RetryPolicy.BackoffFor` plus durable retry timers      |
