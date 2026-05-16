@@ -1,13 +1,14 @@
 import { NavLink, Outlet, Link } from "react-router";
 import type { ReactNode } from "react";
+import { Logo } from "@sched/design";
 
 export function DashboardLayout() {
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-zinc-900">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-6">
-          <Link to="/" className="font-mono text-sm font-medium text-zinc-100">
-            sched
+          <Link to="/" className="flex items-center">
+            <Logo size="sm" />
           </Link>
           <nav className="flex items-center gap-1 text-sm">
             <NavTab to="/app">Workflows</NavTab>
