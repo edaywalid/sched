@@ -1,0 +1,12 @@
+@theme {
+  --color-accent-50: oklch(95% 0.08 145);
+  --color-accent-100: oklch(90% 0.12 145);
+  --color-accent-300: oklch(82% 0.16 145);
+  --color-accent-500: oklch(78% 0.17 145);
+  --color-accent-600: oklch(68% 0.16 145);
+  --color-accent-700: oklch(56% 0.13 145);
+  --color-accent-900: oklch(35% 0.09 145);
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
