@@ -33,3 +33,9 @@ testdata/
 .DS_Store
 *.log
 tmp/
+
+# Web (let the multi-stage build install fresh)
+web/node_modules
+web/**/node_modules
+web/**/dist
+web/**/*.tsbuildinfo
