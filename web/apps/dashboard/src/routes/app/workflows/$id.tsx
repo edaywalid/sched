@@ -1,12 +1,17 @@
-import { useParams, Link, useNavigate } from "react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api/client";
-import { StatusBadge } from "../components/StatusBadge";
-import { RelativeTime } from "../components/RelativeTime";
-import { HistoryTimeline } from "../components/HistoryTimeline";
+import type { ReactNode } from "react";
+import { api } from "../../../api/client";
+import { StatusBadge } from "../../../components/StatusBadge";
+import { RelativeTime } from "../../../components/RelativeTime";
+import { HistoryTimeline } from "../../../components/HistoryTimeline";
 
-export function WorkflowDetailPage() {
-  const { id = "" } = useParams();
+export const Route = createFileRoute("/app/workflows/$id")({
+  component: WorkflowDetailPage,
+});
+
+function WorkflowDetailPage() {
+  const { id } = Route.useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -31,7 +36,7 @@ export function WorkflowDetailPage() {
       <ErrorPanel
         title="Workflow not found"
         message={(details.error as Error).message}
-        onBack={() => navigate("/app")}
+        onBack={() => navigate({ to: "/app" })}
       />
     );
   }
@@ -128,13 +133,11 @@ function MetaCell({
   children,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="bg-zinc-950 p-4">
-      <div className="text-xs uppercase tracking-wider text-zinc-500">
-        {label}
-      </div>
+      <div className="text-xs uppercase tracking-wider text-zinc-500">{label}</div>
       <div className="mt-1 text-sm text-zinc-100">{children}</div>
     </div>
   );
@@ -147,10 +150,9 @@ function Panel({
 }: {
   title: string;
   tone: "success" | "error";
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
-  const border =
-    tone === "error" ? "border-rose-900/60" : "border-emerald-900/60";
+  const border = tone === "error" ? "border-rose-900/60" : "border-emerald-900/60";
   return (
     <section className={`overflow-hidden rounded-md border ${border} bg-zinc-950`}>
       <div className="border-b border-inherit px-4 py-2 text-xs uppercase tracking-wider text-zinc-400">
@@ -172,9 +174,7 @@ function ErrorPanel({
 }) {
   return (
     <div className="rounded-md border border-zinc-900 bg-zinc-950 p-6">
-      <div className="font-mono text-xs uppercase tracking-wider text-zinc-500">
-        {title}
-      </div>
+      <div className="font-mono text-xs uppercase tracking-wider text-zinc-500">{title}</div>
       <p className="mt-2 text-sm text-rose-300">{message}</p>
       <button
         type="button"

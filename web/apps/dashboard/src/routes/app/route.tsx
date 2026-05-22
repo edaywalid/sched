@@ -1,8 +1,11 @@
-import { NavLink, Outlet, Link } from "react-router";
-import type { ReactNode } from "react";
+import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
 import { Logo } from "@sched/design";
 
-export function DashboardLayout() {
+export const Route = createFileRoute("/app")({
+  component: DashboardLayout,
+});
+
+function DashboardLayout() {
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-zinc-900">
@@ -11,7 +14,15 @@ export function DashboardLayout() {
             <Logo size="sm" />
           </Link>
           <nav className="flex items-center gap-1 text-sm">
-            <NavTab to="/app">Workflows</NavTab>
+            <Link
+              to="/app"
+              activeOptions={{ exact: true }}
+              activeProps={{ className: "text-zinc-100" }}
+              inactiveProps={{ className: "text-zinc-400 hover:text-zinc-200" }}
+              className="rounded-md px-2 py-1"
+            >
+              Workflows
+            </Link>
           </nav>
           <div className="ml-auto flex items-center gap-3 text-xs text-zinc-500">
             <span className="hidden sm:inline">connected</span>
@@ -25,22 +36,5 @@ export function DashboardLayout() {
         </div>
       </main>
     </div>
-  );
-}
-
-function NavTab({ to, children }: { to: string; children: ReactNode }) {
-  return (
-    <NavLink
-      to={to}
-      end
-      className={({ isActive }) =>
-        [
-          "rounded-md px-2 py-1",
-          isActive ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200",
-        ].join(" ")
-      }
-    >
-      {children}
-    </NavLink>
   );
 }

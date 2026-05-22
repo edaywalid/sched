@@ -1,12 +1,16 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router";
 import { useState, type ReactNode } from "react";
-import { api } from "../api/client";
-import type { WorkflowStatus, WorkflowSummary } from "../api/types";
-import { StatusBadge } from "../components/StatusBadge";
-import { RelativeTime } from "../components/RelativeTime";
-import { MetricsCards } from "../components/MetricsCards";
-import { StartWorkflowForm } from "../components/StartWorkflowForm";
+import { api } from "../../api/client";
+import type { WorkflowStatus, WorkflowSummary } from "../../api/types";
+import { StatusBadge } from "../../components/StatusBadge";
+import { RelativeTime } from "../../components/RelativeTime";
+import { MetricsCards } from "../../components/MetricsCards";
+import { StartWorkflowForm } from "../../components/StartWorkflowForm";
+
+export const Route = createFileRoute("/app/")({
+  component: WorkflowsPage,
+});
 
 const STATUS_TABS: Array<{ label: string; value: WorkflowStatus | "ALL" }> = [
   { label: "All", value: "ALL" },
@@ -17,7 +21,7 @@ const STATUS_TABS: Array<{ label: string; value: WorkflowStatus | "ALL" }> = [
   { label: "Canceled", value: "CANCELED" },
 ];
 
-export function WorkflowsPage() {
+function WorkflowsPage() {
   const [status, setStatus] = useState<WorkflowStatus | "ALL">("ALL");
   const list = useQuery({
     queryKey: ["workflows", status],
@@ -77,7 +81,7 @@ function WorkflowTable({
   if (error) {
     return (
       <p className="text-sm text-rose-300">
-        Failed to load workflows: {String(error instanceof Error ? error.message : error)}
+        Failed to load workflows: {error instanceof Error ? error.message : String(error)}
       </p>
     );
   }
@@ -109,7 +113,8 @@ function WorkflowTable({
             >
               <Td>
                 <Link
-                  to={`/app/workflows/${wf.workflowId}`}
+                  to="/app/workflows/$id"
+                  params={{ id: wf.workflowId }}
                   className="text-zinc-100 hover:text-accent-300"
                 >
                   {wf.workflowName}
@@ -127,7 +132,8 @@ function WorkflowTable({
               <Td className="text-zinc-300">{formatDuration(wf)}</Td>
               <Td>
                 <Link
-                  to={`/app/workflows/${wf.workflowId}`}
+                  to="/app/workflows/$id"
+                  params={{ id: wf.workflowId }}
                   className="text-xs text-zinc-500 hover:text-zinc-200"
                 >
                   open
@@ -149,9 +155,7 @@ function Th({
   className?: string;
 }) {
   return (
-    <th className={`px-4 py-2 text-left font-medium ${className}`}>
-      {children}
-    </th>
+    <th className={`px-4 py-2 text-left font-medium ${className}`}>{children}</th>
   );
 }
 
