@@ -8,6 +8,7 @@
     "./tokens.css": "./src/tokens.css"
   },
   "dependencies": {
+    "motion": "^12.40.0",
     "react": "^19.0.0"
   },
   "devDependencies": {
