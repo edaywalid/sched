@@ -13,6 +13,8 @@
     "@sched/design": "workspace:*",
     "@tanstack/react-query": "^5.62.7",
     "@tanstack/react-router": "^1.170.8",
+    "lucide-react": "^1.17.0",
+    "motion": "^12.40.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
