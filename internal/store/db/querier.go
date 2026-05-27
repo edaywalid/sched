@@ -18,9 +18,18 @@ type Querier interface {
 	BumpVersion(ctx context.Context, workflowID string) error
 	CompleteWorkflow(ctx context.Context, arg CompleteWorkflowParams) error
 	CreateWorkflow(ctx context.Context, arg CreateWorkflowParams) error
+	// FOR UPDATE SKIP LOCKED lets multiple engine replicas poll the same
+	// table without stepping on each other. Each row is claimed by exactly
+	// one caller until the transaction commits.
+	FetchDueTimers(ctx context.Context, limit int32) ([]Timer, error)
 	GetHistory(ctx context.Context, workflowID string) ([]WorkflowEvent, error)
+	// Used by TimerManager on startup to repopulate in-memory tracking
+	// for unfired timers persisted by a previous run.
+	GetPendingTimers(ctx context.Context) ([]Timer, error)
 	GetWorkflow(ctx context.Context, workflowID string) (WorkflowExecution, error)
+	InsertTimer(ctx context.Context, arg InsertTimerParams) error
 	ListWorkflows(ctx context.Context, arg ListWorkflowsParams) ([]WorkflowExecution, error)
+	MarkTimerFired(ctx context.Context, timerID string) error
 }
 
 var _ Querier = (*Queries)(nil)
