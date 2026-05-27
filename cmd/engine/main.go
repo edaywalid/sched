@@ -33,6 +33,10 @@ func main() {
 
 	e := engine.NewEngine(s)
 
+	if _, err := e.TimerManager().RecoverPendingTimers(context.Background()); err != nil {
+		log.Printf("recover pending timers: %v (continuing)", err)
+	}
+
 	engineAddr := fmt.Sprintf(":%s", enginePort)
 	log.Printf("Starting Engine gRPC server on %s", engineAddr)
 	if err := engine.StartGRPCServer(e, q, engineAddr); err != nil {
