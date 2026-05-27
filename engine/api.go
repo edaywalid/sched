@@ -11,60 +11,121 @@ import (
 
 	"github.com/edaywalid/sched/internal/store"
 	"github.com/edaywalid/sched/proto"
+	"github.com/edaywalid/sched/queue"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 )
 
+// Queue name prefixes. The Phase 2 dispatcher uses one Redis stream per
+// (kind, task queue) pair. PollWorkflowTaskRequest / PollActivityTaskRequest
+// carry the TaskQueue suffix from the worker; StartWorkflow and
+// ScheduleActivity both default to "default" until the proto grows a
+// task_queue field on the producer side.
+const (
+	queuePrefixWorkflow = "tasks:wf:"
+	queuePrefixActivity = "tasks:act:"
+	defaultTaskQueue    = "default"
+
+	// Visibility timeout for reclaim. If a worker has held a task for
+	// longer than this without acking via CompleteWorkflowTask /
+	// CompleteActivity, the reclaim loop pulls it back so another
+	// worker can pick it up.
+	defaultVisibilityTimeout = 30 * time.Second
+)
+
 // EngineServer implements the gRPC EngineService.
 //
-// In Phase 1 task dispatch still uses in-process Go channels keyed by
-// task token. Phase 2 replaces these with Redis Streams so workers in
-// other processes can pick up work.
+// Workers poll PollWorkflowTask / PollActivityTask, which forward to
+// queue.Queue (Redis Streams in production, in-memory channels for
+// tests / local). On completion the matching ack token is XACKed and
+// the workflow/activity events are persisted in the same call path.
 type EngineServer struct {
 	proto.UnimplementedEngineServiceServer
-	engine          *Engine
-	workflowTasksCh chan *WorkflowTaskInfo
-	activityTasksCh chan *ActivityTask
-	pendingWfTasks  map[string]*WorkflowTaskInfo
-	pendingActTasks map[string]*ActivityTask
-	mu              sync.RWMutex
+	engine *Engine
+	queue  queue.Queue
+
+	mu              sync.Mutex
+	pendingWfTasks  map[string]*pendingWorkflowTask
+	pendingActTasks map[string]*pendingActivityTask
+
+	stopReclaim chan struct{}
+	reclaimWG   sync.WaitGroup
 }
 
-type WorkflowTaskInfo struct {
+// pendingWorkflowTask is the bookkeeping the engine keeps between a
+// successful Poll and the corresponding Complete. AckToken is the
+// stream entry ID; the workflow_id lets us write the right history
+// row on completion.
+type pendingWorkflowTask struct {
 	TaskToken    string
 	WorkflowID   string
 	RunID        string
 	WorkflowName string
-	Input        []byte
-	ResultCh     chan *WorkflowResult
+	AckToken     string
+	QueueName    string
+	DequeuedAt   time.Time
 }
 
-type WorkflowResult struct {
-	Result []byte
-	Error  string
-}
-
-type ActivityTask struct {
+type pendingActivityTask struct {
 	TaskToken    string
-	ActivityName string
-	Input        []byte
 	WorkflowID   string
-	ResultCh     chan *ActivityResult
+	ActivityName string
+	AckToken     string
+	QueueName    string
+	DequeuedAt   time.Time
 }
 
-type ActivityResult struct {
-	Result []byte
-	Error  string
+// workflowEnvelope is the payload pushed onto the workflow task stream.
+// Activity envelopes use a similar shape.
+type workflowEnvelope struct {
+	WorkflowID   string `json:"workflow_id"`
+	RunID        string `json:"run_id"`
+	WorkflowName string `json:"workflow_name"`
+	Input        []byte `json:"input"`
 }
 
-func NewEngineServer(engine *Engine) *EngineServer {
-	return &EngineServer{
+type activityEnvelope struct {
+	WorkflowID   string `json:"workflow_id"`
+	ActivityName string `json:"activity_name"`
+	Input        []byte `json:"input"`
+}
+
+func NewEngineServer(engine *Engine, q queue.Queue) *EngineServer {
+	s := &EngineServer{
 		engine:          engine,
-		workflowTasksCh: make(chan *WorkflowTaskInfo, 100),
-		activityTasksCh: make(chan *ActivityTask, 100),
-		pendingWfTasks:  make(map[string]*WorkflowTaskInfo),
-		pendingActTasks: make(map[string]*ActivityTask),
+		queue:           q,
+		pendingWfTasks:  make(map[string]*pendingWorkflowTask),
+		pendingActTasks: make(map[string]*pendingActivityTask),
+		stopReclaim:     make(chan struct{}),
 	}
+	s.reclaimWG.Add(1)
+	go s.reclaimLoop()
+	return s
+}
+
+// Close stops the reclaim loop. The underlying queue and store are
+// owned by the caller.
+func (s *EngineServer) Close() {
+	select {
+	case <-s.stopReclaim:
+	default:
+		close(s.stopReclaim)
+	}
+	s.reclaimWG.Wait()
+}
+
+func workflowQueueName(taskQueue string) string {
+	if taskQueue == "" {
+		taskQueue = defaultTaskQueue
+	}
+	return queuePrefixWorkflow + taskQueue
+}
+
+func activityQueueName(taskQueue string) string {
+	if taskQueue == "" {
+		taskQueue = defaultTaskQueue
+	}
+	return queuePrefixActivity + taskQueue
 }
 
 func (s *EngineServer) StartWorkflow(ctx context.Context, req *proto.StartWorkflowRequest) (*proto.StartWorkflowResponse, error) {
@@ -92,41 +153,18 @@ func (s *EngineServer) StartWorkflow(ctx context.Context, req *proto.StartWorkfl
 		return nil, fmt.Errorf("append start event: %w", err)
 	}
 
-	task := &WorkflowTaskInfo{
-		TaskToken:    uuid.New().String(),
+	envelope, err := json.Marshal(workflowEnvelope{
 		WorkflowID:   workflowID,
 		RunID:        runID,
 		WorkflowName: req.WorkflowName,
 		Input:        req.Input,
-		ResultCh:     make(chan *WorkflowResult),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal workflow envelope: %w", err)
 	}
-
-	go func() {
-		s.workflowTasksCh <- task
-
-		result := <-task.ResultCh
-
-		// Background context: the caller's RPC has already returned by
-		// the time the workflow completes.
-		bgCtx := context.Background()
-		if result.Error != "" {
-			completedDetails, _ := json.Marshal(map[string]any{"error": result.Error})
-			_ = s.engine.store.AppendEvent(bgCtx, store.Event{
-				WorkflowID: workflowID,
-				Type:       EventTypeWorkflowFailed,
-				Details:    completedDetails,
-			})
-			_ = s.engine.store.CompleteWorkflow(bgCtx, workflowID, store.StatusFailed, nil, result.Error)
-		} else {
-			completedDetails, _ := json.Marshal(map[string]any{"result": json.RawMessage(result.Result)})
-			_ = s.engine.store.AppendEvent(bgCtx, store.Event{
-				WorkflowID: workflowID,
-				Type:       EventTypeWorkflowCompleted,
-				Details:    completedDetails,
-			})
-			_ = s.engine.store.CompleteWorkflow(bgCtx, workflowID, store.StatusCompleted, result.Result, "")
-		}
-	}()
+	if err := s.queue.Enqueue(ctx, workflowQueueName(defaultTaskQueue), envelope); err != nil {
+		return nil, fmt.Errorf("enqueue workflow task: %w", err)
+	}
 
 	log.Printf("Queued workflow %s (ID: %s)", req.WorkflowName, workflowID)
 
@@ -141,30 +179,47 @@ func (s *EngineServer) PollWorkflowTask(ctx context.Context, req *proto.PollWork
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	}
+	queueName := workflowQueueName(req.TaskQueue)
 
-	select {
-	case task := <-s.workflowTasksCh:
-		s.mu.Lock()
-		s.pendingWfTasks[task.TaskToken] = task
-		s.mu.Unlock()
-
-		return &proto.PollWorkflowTaskResponse{
-			TaskToken:    task.TaskToken,
-			WorkflowName: task.WorkflowName,
-			Input:        task.Input,
-			WorkflowId:   task.WorkflowID,
-			RunId:        task.RunID,
-		}, nil
-	case <-time.After(timeout):
-		return &proto.PollWorkflowTaskResponse{}, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	msg, err := s.queue.Dequeue(ctx, queueName, timeout)
+	if err != nil {
+		return nil, fmt.Errorf("dequeue workflow task: %w", err)
 	}
+	if msg == nil {
+		return &proto.PollWorkflowTaskResponse{}, nil
+	}
+
+	var env workflowEnvelope
+	if err := json.Unmarshal(msg.Payload, &env); err != nil {
+		_ = s.queue.Ack(ctx, queueName, msg.AckToken)
+		return nil, fmt.Errorf("decode workflow envelope: %w", err)
+	}
+
+	taskToken := uuid.New().String()
+	s.mu.Lock()
+	s.pendingWfTasks[taskToken] = &pendingWorkflowTask{
+		TaskToken:    taskToken,
+		WorkflowID:   env.WorkflowID,
+		RunID:        env.RunID,
+		WorkflowName: env.WorkflowName,
+		AckToken:     msg.AckToken,
+		QueueName:    queueName,
+		DequeuedAt:   time.Now(),
+	}
+	s.mu.Unlock()
+
+	return &proto.PollWorkflowTaskResponse{
+		TaskToken:    taskToken,
+		WorkflowName: env.WorkflowName,
+		Input:        env.Input,
+		WorkflowId:   env.WorkflowID,
+		RunId:        env.RunID,
+	}, nil
 }
 
 func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.CompleteWorkflowTaskRequest) (*proto.CompleteWorkflowTaskResponse, error) {
 	s.mu.Lock()
-	task, ok := s.pendingWfTasks[req.TaskToken]
+	pending, ok := s.pendingWfTasks[req.TaskToken]
 	if !ok {
 		s.mu.Unlock()
 		return nil, fmt.Errorf("workflow task not found: %s", req.TaskToken)
@@ -172,30 +227,29 @@ func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.Comp
 	delete(s.pendingWfTasks, req.TaskToken)
 	s.mu.Unlock()
 
-	task.ResultCh <- &WorkflowResult{
-		Result: req.Result,
-		Error:  req.Error,
+	if req.Error != "" {
+		failed, _ := json.Marshal(map[string]any{"error": req.Error})
+		_ = s.engine.store.AppendEvent(ctx, store.Event{
+			WorkflowID: pending.WorkflowID,
+			Type:       EventTypeWorkflowFailed,
+			Details:    failed,
+		})
+		_ = s.engine.store.CompleteWorkflow(ctx, pending.WorkflowID, store.StatusFailed, nil, req.Error)
+	} else {
+		done, _ := json.Marshal(map[string]any{"result": json.RawMessage(req.Result)})
+		_ = s.engine.store.AppendEvent(ctx, store.Event{
+			WorkflowID: pending.WorkflowID,
+			Type:       EventTypeWorkflowCompleted,
+			Details:    done,
+		})
+		_ = s.engine.store.CompleteWorkflow(ctx, pending.WorkflowID, store.StatusCompleted, req.Result, "")
+	}
+
+	if err := s.queue.Ack(ctx, pending.QueueName, pending.AckToken); err != nil {
+		log.Printf("ack workflow task %s: %v", req.TaskToken, err)
 	}
 
 	return &proto.CompleteWorkflowTaskResponse{Success: true}, nil
-}
-
-func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.CompleteActivityRequest) (*proto.CompleteActivityResponse, error) {
-	s.mu.Lock()
-	task, ok := s.pendingActTasks[req.TaskToken]
-	if !ok {
-		s.mu.Unlock()
-		return nil, fmt.Errorf("task not found: %s", req.TaskToken)
-	}
-	delete(s.pendingActTasks, req.TaskToken)
-	s.mu.Unlock()
-
-	task.ResultCh <- &ActivityResult{
-		Result: req.Result,
-		Error:  req.Error,
-	}
-
-	return &proto.CompleteActivityResponse{Success: true}, nil
 }
 
 func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActivityTaskRequest) (*proto.PollActivityTaskResponse, error) {
@@ -203,24 +257,109 @@ func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActi
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	}
+	queueName := activityQueueName(req.TaskQueue)
 
-	select {
-	case task := <-s.activityTasksCh:
-		s.mu.Lock()
-		s.pendingActTasks[task.TaskToken] = task
-		s.mu.Unlock()
-
-		return &proto.PollActivityTaskResponse{
-			TaskToken:    task.TaskToken,
-			ActivityName: task.ActivityName,
-			Input:        task.Input,
-			WorkflowId:   task.WorkflowID,
-		}, nil
-	case <-time.After(timeout):
-		return &proto.PollActivityTaskResponse{}, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	msg, err := s.queue.Dequeue(ctx, queueName, timeout)
+	if err != nil {
+		return nil, fmt.Errorf("dequeue activity task: %w", err)
 	}
+	if msg == nil {
+		return &proto.PollActivityTaskResponse{}, nil
+	}
+
+	var env activityEnvelope
+	if err := json.Unmarshal(msg.Payload, &env); err != nil {
+		_ = s.queue.Ack(ctx, queueName, msg.AckToken)
+		return nil, fmt.Errorf("decode activity envelope: %w", err)
+	}
+
+	taskToken := uuid.New().String()
+	s.mu.Lock()
+	s.pendingActTasks[taskToken] = &pendingActivityTask{
+		TaskToken:    taskToken,
+		WorkflowID:   env.WorkflowID,
+		ActivityName: env.ActivityName,
+		AckToken:     msg.AckToken,
+		QueueName:    queueName,
+		DequeuedAt:   time.Now(),
+	}
+	s.mu.Unlock()
+
+	return &proto.PollActivityTaskResponse{
+		TaskToken:    taskToken,
+		ActivityName: env.ActivityName,
+		Input:        env.Input,
+		WorkflowId:   env.WorkflowID,
+	}, nil
+}
+
+func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.CompleteActivityRequest) (*proto.CompleteActivityResponse, error) {
+	s.mu.Lock()
+	pending, ok := s.pendingActTasks[req.TaskToken]
+	if !ok {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("task not found: %s", req.TaskToken)
+	}
+	delete(s.pendingActTasks, req.TaskToken)
+	s.mu.Unlock()
+
+	if req.Error != "" {
+		failed, _ := json.Marshal(map[string]any{
+			"activity_name": pending.ActivityName,
+			"error":         req.Error,
+		})
+		_ = s.engine.store.AppendEvent(ctx, store.Event{
+			WorkflowID: pending.WorkflowID,
+			Type:       EventTypeActivityFailed,
+			Details:    failed,
+		})
+	} else {
+		done, _ := json.Marshal(map[string]any{
+			"activity_name": pending.ActivityName,
+			"result":        json.RawMessage(req.Result),
+		})
+		_ = s.engine.store.AppendEvent(ctx, store.Event{
+			WorkflowID: pending.WorkflowID,
+			Type:       EventTypeActivityCompleted,
+			Details:    done,
+		})
+	}
+
+	if err := s.queue.Ack(ctx, pending.QueueName, pending.AckToken); err != nil {
+		log.Printf("ack activity task %s: %v", req.TaskToken, err)
+	}
+
+	return &proto.CompleteActivityResponse{Success: true}, nil
+}
+
+func (s *EngineServer) ScheduleActivity(ctx context.Context, req *proto.ScheduleActivityRequest) (*proto.ScheduleActivityResponse, error) {
+	activityID := uuid.New().String()
+
+	scheduledDetails, _ := json.Marshal(map[string]any{
+		"activity_id":   activityID,
+		"activity_name": req.ActivityName,
+	})
+	if err := s.engine.store.AppendEvent(ctx, store.Event{
+		WorkflowID: req.WorkflowId,
+		Type:       EventTypeActivityScheduled,
+		Details:    scheduledDetails,
+	}); err != nil {
+		return nil, fmt.Errorf("record scheduled activity: %w", err)
+	}
+
+	envelope, err := json.Marshal(activityEnvelope{
+		WorkflowID:   req.WorkflowId,
+		ActivityName: req.ActivityName,
+		Input:        req.Input,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal activity envelope: %w", err)
+	}
+	if err := s.queue.Enqueue(ctx, activityQueueName(defaultTaskQueue), envelope); err != nil {
+		return nil, fmt.Errorf("enqueue activity task: %w", err)
+	}
+
+	return &proto.ScheduleActivityResponse{ActivityId: activityID}, nil
 }
 
 func (s *EngineServer) SignalWorkflow(ctx context.Context, req *proto.SignalWorkflowRequest) (*proto.SignalWorkflowResponse, error) {
@@ -264,36 +403,6 @@ func (s *EngineServer) GetWorkflowStatus(ctx context.Context, req *proto.GetWork
 	}, nil
 }
 
-func (s *EngineServer) ScheduleActivity(ctx context.Context, req *proto.ScheduleActivityRequest) (*proto.ScheduleActivityResponse, error) {
-	activityID := uuid.New().String()
-
-	scheduledDetails, _ := json.Marshal(map[string]any{
-		"activity_id":   activityID,
-		"activity_name": req.ActivityName,
-	})
-	if err := s.engine.store.AppendEvent(ctx, store.Event{
-		WorkflowID: req.WorkflowId,
-		Type:       EventTypeActivityScheduled,
-		Details:    scheduledDetails,
-	}); err != nil {
-		return nil, fmt.Errorf("record scheduled activity: %w", err)
-	}
-
-	task := &ActivityTask{
-		TaskToken:    uuid.New().String(),
-		ActivityName: req.ActivityName,
-		Input:        req.Input,
-		WorkflowID:   req.WorkflowId,
-		ResultCh:     make(chan *ActivityResult),
-	}
-
-	s.activityTasksCh <- task
-
-	return &proto.ScheduleActivityResponse{
-		ActivityId: activityID,
-	}, nil
-}
-
 func (s *EngineServer) ListWorkflows(ctx context.Context, req *proto.ListWorkflowsRequest) (*proto.ListWorkflowsResponse, error) {
 	filter := store.ListFilter{Limit: int(req.PageSize)}
 	if req.StatusFilter != "" {
@@ -303,7 +412,6 @@ func (s *EngineServer) ListWorkflows(ctx context.Context, req *proto.ListWorkflo
 	if err != nil {
 		return nil, err
 	}
-
 	workflows := make([]*proto.WorkflowExecutionInfo, 0, len(executions))
 	for _, exec := range executions {
 		workflows = append(workflows, workflowToProto(exec))
@@ -320,7 +428,6 @@ func (s *EngineServer) GetWorkflowDetails(ctx context.Context, req *proto.GetWor
 	if err != nil {
 		return nil, fmt.Errorf("fetch history: %w", err)
 	}
-
 	events := make([]*proto.WorkflowEvent, 0, len(history))
 	for _, ev := range history {
 		events = append(events, &proto.WorkflowEvent{
@@ -329,7 +436,6 @@ func (s *EngineServer) GetWorkflowDetails(ctx context.Context, req *proto.GetWor
 			Details:   string(ev.Details),
 		})
 	}
-
 	return &proto.GetWorkflowDetailsResponse{
 		Execution: workflowToProto(exec),
 		History:   events,
@@ -351,7 +457,6 @@ func (s *EngineServer) GetWorkflowMetrics(ctx context.Context, req *proto.GetWor
 
 	for _, exec := range executions {
 		metrics.TotalWorkflows++
-
 		switch exec.Status {
 		case store.StatusRunning:
 			metrics.RunningWorkflows++
@@ -364,7 +469,6 @@ func (s *EngineServer) GetWorkflowMetrics(ctx context.Context, req *proto.GetWor
 		case store.StatusFailed:
 			metrics.FailedWorkflows++
 		}
-
 		metrics.WorkflowsByType[exec.Name]++
 	}
 
@@ -373,6 +477,89 @@ func (s *EngineServer) GetWorkflowMetrics(ctx context.Context, req *proto.GetWor
 	}
 
 	return &proto.GetWorkflowMetricsResponse{Metrics: metrics}, nil
+}
+
+// reclaimLoop runs in the background and surfaces messages whose
+// consumer (this engine) has been holding them longer than the
+// visibility timeout. In practice this happens when a worker dies
+// mid-execution: the engine never gets the Complete RPC, so the entry
+// stays in pendingWfTasks/pendingActTasks. After the timeout the
+// reclaim cycle re-enqueues the work so another worker can pick it up.
+//
+// Phase 2 reclaim is conservative: it inspects only the engine's own
+// in-process map. Cross-engine reclaim (when shards migrate between
+// replicas) lands in Phase 4.
+func (s *EngineServer) reclaimLoop() {
+	defer s.reclaimWG.Done()
+
+	ticker := time.NewTicker(defaultVisibilityTimeout / 2)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.stopReclaim:
+			return
+		case <-ticker.C:
+			s.reclaimExpired()
+		}
+	}
+}
+
+func (s *EngineServer) reclaimExpired() {
+	now := time.Now()
+	type expired struct {
+		taskToken string
+		queueName string
+		ackToken  string
+		envelope  []byte
+	}
+	var workflows, activities []expired
+
+	s.mu.Lock()
+	for tok, p := range s.pendingWfTasks {
+		if now.Sub(p.DequeuedAt) < defaultVisibilityTimeout {
+			continue
+		}
+		env, _ := json.Marshal(workflowEnvelope{
+			WorkflowID:   p.WorkflowID,
+			RunID:        p.RunID,
+			WorkflowName: p.WorkflowName,
+		})
+		workflows = append(workflows, expired{tok, p.QueueName, p.AckToken, env})
+		delete(s.pendingWfTasks, tok)
+	}
+	for tok, p := range s.pendingActTasks {
+		if now.Sub(p.DequeuedAt) < defaultVisibilityTimeout {
+			continue
+		}
+		env, _ := json.Marshal(activityEnvelope{
+			WorkflowID:   p.WorkflowID,
+			ActivityName: p.ActivityName,
+		})
+		activities = append(activities, expired{tok, p.QueueName, p.AckToken, env})
+		delete(s.pendingActTasks, tok)
+	}
+	s.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for _, e := range workflows {
+		log.Printf("reclaim: re-enqueueing abandoned workflow task %s", e.taskToken)
+		if err := s.queue.Ack(ctx, e.queueName, e.ackToken); err != nil {
+			log.Printf("reclaim: ack failed: %v", err)
+		}
+		if err := s.queue.Enqueue(ctx, e.queueName, e.envelope); err != nil {
+			log.Printf("reclaim: re-enqueue failed: %v", err)
+		}
+	}
+	for _, e := range activities {
+		log.Printf("reclaim: re-enqueueing abandoned activity task %s", e.taskToken)
+		if err := s.queue.Ack(ctx, e.queueName, e.ackToken); err != nil {
+			log.Printf("reclaim: ack failed: %v", err)
+		}
+		if err := s.queue.Enqueue(ctx, e.queueName, e.envelope); err != nil {
+			log.Printf("reclaim: re-enqueue failed: %v", err)
+		}
+	}
 }
 
 func workflowToProto(w *store.Workflow) *proto.WorkflowExecutionInfo {
@@ -391,14 +578,15 @@ func workflowToProto(w *store.Workflow) *proto.WorkflowExecutionInfo {
 	return info
 }
 
-func StartGRPCServer(engine *Engine, address string) error {
+// StartGRPCServer wires the engine and queue into a gRPC server.
+func StartGRPCServer(engine *Engine, q queue.Queue, address string) error {
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 
 	grpcServer := grpc.NewServer()
-	engineServer := NewEngineServer(engine)
+	engineServer := NewEngineServer(engine, q)
 	proto.RegisterEngineServiceServer(grpcServer, engineServer)
 
 	log.Printf("Engine gRPC server listening on %s", address)
