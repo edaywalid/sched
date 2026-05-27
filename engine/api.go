@@ -9,11 +9,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/edaywalid/sched/internal/store"
 	"github.com/edaywalid/sched/proto"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 )
 
+// EngineServer implements the gRPC EngineService.
+//
+// In Phase 1 task dispatch still uses in-process Go channels keyed by
+// task token. Phase 2 replaces these with Redis Streams so workers in
+// other processes can pick up work.
 type EngineServer struct {
 	proto.UnimplementedEngineServiceServer
 	engine          *Engine
@@ -65,22 +71,33 @@ func (s *EngineServer) StartWorkflow(ctx context.Context, req *proto.StartWorkfl
 	workflowID := uuid.New().String()
 	runID := uuid.New().String()
 
-	var input interface{}
-	if len(req.Input) > 0 {
-		if err := json.Unmarshal(req.Input, &input); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal input: %w", err)
-		}
+	if err := s.engine.store.CreateWorkflow(ctx, store.Workflow{
+		WorkflowID: workflowID,
+		RunID:      runID,
+		Name:       req.WorkflowName,
+		Status:     store.StatusRunning,
+		Input:      req.Input,
+	}); err != nil {
+		return nil, fmt.Errorf("create workflow: %w", err)
 	}
 
-	s.engine.persistence.CreateWorkflowExecution(workflowID, req.WorkflowName, input)
+	startedDetails, _ := json.Marshal(map[string]any{
+		"workflow_name": req.WorkflowName,
+	})
+	if err := s.engine.store.AppendEvent(ctx, store.Event{
+		WorkflowID: workflowID,
+		Type:       EventTypeWorkflowStarted,
+		Details:    startedDetails,
+	}); err != nil {
+		return nil, fmt.Errorf("append start event: %w", err)
+	}
 
-	inputBytes, _ := json.Marshal(input)
 	task := &WorkflowTaskInfo{
 		TaskToken:    uuid.New().String(),
 		WorkflowID:   workflowID,
 		RunID:        runID,
 		WorkflowName: req.WorkflowName,
-		Input:        inputBytes,
+		Input:        req.Input,
 		ResultCh:     make(chan *WorkflowResult),
 	}
 
@@ -88,14 +105,26 @@ func (s *EngineServer) StartWorkflow(ctx context.Context, req *proto.StartWorkfl
 		s.workflowTasksCh <- task
 
 		result := <-task.ResultCh
+
+		// Background context: the caller's RPC has already returned by
+		// the time the workflow completes.
+		bgCtx := context.Background()
 		if result.Error != "" {
-			s.engine.persistence.CompleteWorkflow(workflowID, nil, fmt.Errorf("%s", result.Error))
+			completedDetails, _ := json.Marshal(map[string]any{"error": result.Error})
+			_ = s.engine.store.AppendEvent(bgCtx, store.Event{
+				WorkflowID: workflowID,
+				Type:       EventTypeWorkflowFailed,
+				Details:    completedDetails,
+			})
+			_ = s.engine.store.CompleteWorkflow(bgCtx, workflowID, store.StatusFailed, nil, result.Error)
 		} else {
-			var output interface{}
-			if len(result.Result) > 0 {
-				json.Unmarshal(result.Result, &output)
-			}
-			s.engine.persistence.CompleteWorkflow(workflowID, output, nil)
+			completedDetails, _ := json.Marshal(map[string]any{"result": json.RawMessage(result.Result)})
+			_ = s.engine.store.AppendEvent(bgCtx, store.Event{
+				WorkflowID: workflowID,
+				Type:       EventTypeWorkflowCompleted,
+				Details:    completedDetails,
+			})
+			_ = s.engine.store.CompleteWorkflow(bgCtx, workflowID, store.StatusCompleted, result.Result, "")
 		}
 	}()
 
@@ -143,7 +172,6 @@ func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.Comp
 	delete(s.pendingWfTasks, req.TaskToken)
 	s.mu.Unlock()
 
-	// Send result back
 	task.ResultCh <- &WorkflowResult{
 		Result: req.Result,
 		Error:  req.Error,
@@ -196,45 +224,60 @@ func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActi
 }
 
 func (s *EngineServer) SignalWorkflow(ctx context.Context, req *proto.SignalWorkflowRequest) (*proto.SignalWorkflowResponse, error) {
-	s.engine.persistence.AddEvent(req.WorkflowId, EventTypeSignalReceived, map[string]interface{}{
+	details, _ := json.Marshal(map[string]any{
 		"signal_name": req.SignalName,
-		"input":       req.Input,
+		"input":       json.RawMessage(req.Input),
 	})
+	if err := s.engine.store.AppendEvent(ctx, store.Event{
+		WorkflowID: req.WorkflowId,
+		Type:       EventTypeSignalReceived,
+		Details:    details,
+	}); err != nil {
+		return nil, fmt.Errorf("record signal: %w", err)
+	}
 
-	s.mu.Lock()
-	if signalCh, ok := s.engine.signals[req.WorkflowId]; ok {
-		signalCh <- &Signal{
-			Name:  req.SignalName,
-			Input: req.Input,
+	// Phase 3 fully wires the signal channel into the workflow task
+	// loop. For now we only persist the event and deliver to any
+	// in-process listener if present.
+	s.engine.signalsMu.RLock()
+	signalCh, ok := s.engine.signals[req.WorkflowId]
+	s.engine.signalsMu.RUnlock()
+	if ok {
+		select {
+		case signalCh <- &Signal{Name: req.SignalName, Input: req.Input}:
+		default:
 		}
 	}
-	s.mu.Unlock()
 
 	return &proto.SignalWorkflowResponse{Success: true}, nil
 }
 
 func (s *EngineServer) GetWorkflowStatus(ctx context.Context, req *proto.GetWorkflowStatusRequest) (*proto.GetWorkflowStatusResponse, error) {
-	status, result, err := s.engine.persistence.GetWorkflowStatus(req.WorkflowId)
-
-	var errStr string
+	wf, err := s.engine.store.GetWorkflow(ctx, req.WorkflowId)
 	if err != nil {
-		errStr = err.Error()
+		return nil, err
 	}
-
-	var resultBytes []byte
-	if result != nil {
-		resultBytes, _ = json.Marshal(result)
-	}
-
 	return &proto.GetWorkflowStatusResponse{
-		Status: status,
-		Result: resultBytes,
-		Error:  errStr,
+		Status: string(wf.Status),
+		Result: wf.Result,
+		Error:  wf.Error,
 	}, nil
 }
 
 func (s *EngineServer) ScheduleActivity(ctx context.Context, req *proto.ScheduleActivityRequest) (*proto.ScheduleActivityResponse, error) {
 	activityID := uuid.New().String()
+
+	scheduledDetails, _ := json.Marshal(map[string]any{
+		"activity_id":   activityID,
+		"activity_name": req.ActivityName,
+	})
+	if err := s.engine.store.AppendEvent(ctx, store.Event{
+		WorkflowID: req.WorkflowId,
+		Type:       EventTypeActivityScheduled,
+		Details:    scheduledDetails,
+	}); err != nil {
+		return nil, fmt.Errorf("record scheduled activity: %w", err)
+	}
 
 	task := &ActivityTask{
 		TaskToken:    uuid.New().String(),
@@ -246,131 +289,58 @@ func (s *EngineServer) ScheduleActivity(ctx context.Context, req *proto.Schedule
 
 	s.activityTasksCh <- task
 
-
 	return &proto.ScheduleActivityResponse{
 		ActivityId: activityID,
 	}, nil
 }
 
-func (s *EngineServer) scheduleActivityInternal(workflowID, activityName string, input interface{}) (interface{}, error) {
-	taskToken := uuid.New().String()
-
-	inputBytes, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal input: %w", err)
-	}
-
-	task := &ActivityTask{
-		TaskToken:    taskToken,
-		ActivityName: activityName,
-		Input:        inputBytes,
-		WorkflowID:   workflowID,
-		ResultCh:     make(chan *ActivityResult),
-	}
-
-	s.activityTasksCh <- task
-
-	result := <-task.ResultCh
-	if result.Error != "" {
-		return nil, fmt.Errorf("%s", result.Error)
-	}
-
-	var output interface{}
-	if len(result.Result) > 0 {
-		if err := json.Unmarshal(result.Result, &output); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal result: %w", err)
-		}
-	}
-
-	return output, nil
-}
-
- 
 func (s *EngineServer) ListWorkflows(ctx context.Context, req *proto.ListWorkflowsRequest) (*proto.ListWorkflowsResponse, error) {
-	executions := s.engine.GetAllWorkflowExecutions()
-
-	var workflows []*proto.WorkflowExecutionInfo
-	for _, exec := range executions {
-		// Filter by status if requested
-		if req.StatusFilter != "" && string(exec.Status) != req.StatusFilter {
-			continue
-		}
-
-		wf := &proto.WorkflowExecutionInfo{
-			WorkflowId:   exec.WorkflowID,
-			RunId:        exec.WorkflowID, // Using workflow ID as run ID for now
-			WorkflowName: exec.WorkflowName,
-			Status:       string(exec.Status),
-			StartTime:    exec.StartTime.Unix(),
-		}
-
-		if exec.EndTime != nil {
-			wf.EndTime = exec.EndTime.Unix()
-		}
-
-		if exec.Result != nil {
-			resultBytes, _ := json.Marshal(exec.Result)
-			wf.Result = string(resultBytes)
-		}
-
-		if exec.Error != nil {
-			wf.Error = exec.Error.Error()
-		}
-
-		workflows = append(workflows, wf)
+	filter := store.ListFilter{Limit: int(req.PageSize)}
+	if req.StatusFilter != "" {
+		filter.Status = store.WorkflowStatus(req.StatusFilter)
+	}
+	executions, err := s.engine.ListWorkflows(ctx, filter)
+	if err != nil {
+		return nil, err
 	}
 
-	return &proto.ListWorkflowsResponse{
-		Workflows: workflows,
-	}, nil
+	workflows := make([]*proto.WorkflowExecutionInfo, 0, len(executions))
+	for _, exec := range executions {
+		workflows = append(workflows, workflowToProto(exec))
+	}
+	return &proto.ListWorkflowsResponse{Workflows: workflows}, nil
 }
 
 func (s *EngineServer) GetWorkflowDetails(ctx context.Context, req *proto.GetWorkflowDetailsRequest) (*proto.GetWorkflowDetailsResponse, error) {
-	exec, err := s.engine.GetWorkflowExecution(req.WorkflowId)
+	exec, err := s.engine.GetWorkflow(ctx, req.WorkflowId)
 	if err != nil {
 		return nil, fmt.Errorf("workflow not found: %w", err)
 	}
-
-	wf := &proto.WorkflowExecutionInfo{
-		WorkflowId:   exec.WorkflowID,
-		RunId:        exec.WorkflowID,
-		WorkflowName: exec.WorkflowName,
-		Status:       string(exec.Status),
-		StartTime:    exec.StartTime.Unix(),
+	history, err := s.engine.store.GetHistory(ctx, req.WorkflowId)
+	if err != nil {
+		return nil, fmt.Errorf("fetch history: %w", err)
 	}
 
-	if exec.EndTime != nil {
-		wf.EndTime = exec.EndTime.Unix()
-	}
-
-	if exec.Result != nil {
-		resultBytes, _ := json.Marshal(exec.Result)
-		wf.Result = string(resultBytes)
-	}
-
-	if exec.Error != nil {
-		wf.Error = exec.Error.Error()
-	}
-
-	// Convert history events
-	var history []*proto.WorkflowEvent
-	for _, event := range exec.History {
-		detailsBytes, _ := json.Marshal(event.Details)
-		history = append(history, &proto.WorkflowEvent{
-			EventType: event.EventType,
-			Timestamp: event.Timestamp.Unix(),
-			Details:   string(detailsBytes),
+	events := make([]*proto.WorkflowEvent, 0, len(history))
+	for _, ev := range history {
+		events = append(events, &proto.WorkflowEvent{
+			EventType: ev.Type,
+			Timestamp: ev.Timestamp.Unix(),
+			Details:   string(ev.Details),
 		})
 	}
 
 	return &proto.GetWorkflowDetailsResponse{
-		Execution: wf,
-		History:   history,
+		Execution: workflowToProto(exec),
+		History:   events,
 	}, nil
 }
 
 func (s *EngineServer) GetWorkflowMetrics(ctx context.Context, req *proto.GetWorkflowMetricsRequest) (*proto.GetWorkflowMetricsResponse, error) {
-	executions := s.engine.GetAllWorkflowExecutions()
+	executions, err := s.engine.ListWorkflows(ctx, store.ListFilter{Limit: 10000})
+	if err != nil {
+		return nil, err
+	}
 
 	metrics := &proto.WorkflowMetrics{
 		WorkflowsByType: make(map[string]int32),
@@ -382,32 +352,43 @@ func (s *EngineServer) GetWorkflowMetrics(ctx context.Context, req *proto.GetWor
 	for _, exec := range executions {
 		metrics.TotalWorkflows++
 
-		switch string(exec.Status) {
-		case "Running":
+		switch exec.Status {
+		case store.StatusRunning:
 			metrics.RunningWorkflows++
-		case "Completed":
+		case store.StatusCompleted:
 			metrics.CompletedWorkflows++
 			completedCount++
-
 			if exec.EndTime != nil {
-				executionTime := exec.EndTime.Sub(exec.StartTime).Milliseconds()
-				totalExecutionTime += executionTime
+				totalExecutionTime += exec.EndTime.Sub(exec.StartTime).Milliseconds()
 			}
-		case "Failed":
+		case store.StatusFailed:
 			metrics.FailedWorkflows++
 		}
 
-		// Count by workflow type
-		metrics.WorkflowsByType[exec.WorkflowName]++
+		metrics.WorkflowsByType[exec.Name]++
 	}
 
 	if completedCount > 0 {
 		metrics.AvgExecutionTimeMs = float64(totalExecutionTime) / float64(completedCount)
 	}
 
-	return &proto.GetWorkflowMetricsResponse{
-		Metrics: metrics,
-	}, nil
+	return &proto.GetWorkflowMetricsResponse{Metrics: metrics}, nil
+}
+
+func workflowToProto(w *store.Workflow) *proto.WorkflowExecutionInfo {
+	info := &proto.WorkflowExecutionInfo{
+		WorkflowId:   w.WorkflowID,
+		RunId:        w.RunID,
+		WorkflowName: w.Name,
+		Status:       string(w.Status),
+		StartTime:    w.StartTime.Unix(),
+		Result:       string(w.Result),
+		Error:        w.Error,
+	}
+	if w.EndTime != nil {
+		info.EndTime = w.EndTime.Unix()
+	}
+	return info
 }
 
 func StartGRPCServer(engine *Engine, address string) error {
