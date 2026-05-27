@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import type { WorkflowEvent } from "../api/types";
 
 const EVENT_TONE: Record<string, string> = {
@@ -28,15 +29,23 @@ export function HistoryTimeline({ events }: { events: WorkflowEvent[] }) {
   }
 
   return (
-    <ol className="overflow-hidden rounded-md border border-zinc-900 bg-zinc-950">
-      {events.map((ev, i) => (
-        <HistoryRow
-          key={`${ev.timestamp}-${i}`}
-          event={ev}
-          isFirst={i === 0}
-          isLast={i === events.length - 1}
-        />
-      ))}
+    <ol className="overflow-hidden rounded-lg border border-zinc-900 bg-zinc-950">
+      <AnimatePresence initial={false}>
+        {events.map((ev, i) => (
+          <motion.div
+            key={`${ev.timestamp}-${i}`}
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <HistoryRow
+              event={ev}
+              isFirst={i === 0}
+              isLast={i === events.length - 1}
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </ol>
   );
 }
