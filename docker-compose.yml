@@ -34,26 +34,45 @@ services:
       timeout: 3s
       retries: 5
 
+  # One-shot migration runner. Applies all pending migrations and exits.
+  # `make up` triggers it via depends_on; you can also run it directly:
+  #   docker compose run --rm migrate
+  migrate:
+    image: migrate/migrate:v4.17.1
+    container_name: sched-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+    networks:
+      - sched-network
+    command:
+      [
+        "-path", "/migrations",
+        "-database", "postgres://sched:sched_password@postgres:5432/sched?sslmode=disable",
+        "up",
+      ]
+    restart: "no"
+
   engine:
     build:
       context: .
       dockerfile: Dockerfile.engine
     container_name: sched-engine
     ports:
-      - "50051:50051"  
+      - "50051:50051"
     environment:
       - ENGINE_PORT=50051
+      - SCHED_POSTGRES_DSN=postgres://sched:sched_password@postgres:5432/sched?sslmode=disable
       - REDIS_ADDR=redis:6379
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=sched
-      - POSTGRES_USER=sched
-      - POSTGRES_PASSWORD=sched_password
     depends_on:
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks:
       - sched-network
     restart: unless-stopped
@@ -64,7 +83,7 @@ services:
       dockerfile: Dockerfile.dashboard
     container_name: sched-dashboard
     ports:
-      - "8080:8080"    # Web Dashboard
+      - "8080:8080"
     environment:
       - ENGINE_ADDRESS=engine:50051
       - DASHBOARD_PORT=8080
