@@ -1,0 +1,26 @@
+[build]
+  base    = "web"
+  command = "pnpm install --frozen-lockfile && pnpm --filter @sched/site build"
+  publish = "apps/site/dist/client"
+
+[build.environment]
+  NODE_VERSION = "22"
+  PNPM_VERSION = "10"
+
+# Fingerprinted JS/CSS chunks: immutable for a year.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Prerendered HTML: short edge cache, must-revalidate.
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Anything we did not prerender falls back to the SPA shell.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
