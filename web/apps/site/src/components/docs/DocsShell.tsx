@@ -12,34 +12,37 @@ const NAV: NavGroup[] = [
     title: "Get started",
     items: [
       { label: "Overview", to: "/docs" },
+      { label: "Install", to: "/docs/get-started/install" },
       { label: "Quickstart", to: "/docs/get-started/quickstart" },
-      { label: "Install", to: "/docs/get-started/install", soon: true },
     ],
   },
   {
     title: "Concepts",
     items: [
       { label: "Workflows", to: "/docs/concepts/workflows" },
-      { label: "Activities", to: "/docs/concepts/activities", soon: true },
-      { label: "Signals", to: "/docs/concepts/signals", soon: true },
-      { label: "Timers", to: "/docs/concepts/timers", soon: true },
+      { label: "Activities", to: "/docs/concepts/activities" },
+      { label: "Signals", to: "/docs/concepts/signals" },
+      { label: "Timers", to: "/docs/concepts/timers" },
     ],
   },
   {
     title: "Architecture",
     items: [
       { label: "Overview", to: "/docs/architecture/overview" },
-      { label: "Replay model", to: "/docs/architecture/replay", soon: true },
-      { label: "Persistence", to: "/docs/architecture/persistence", soon: true },
+      { label: "Replay model", to: "/docs/architecture/replay" },
+      { label: "Persistence", to: "/docs/architecture/persistence" },
     ],
   },
   {
     title: "Operating",
     items: [
-      { label: "Observability", to: "/docs/operating/observability", soon: true },
-      { label: "High availability", to: "/docs/operating/ha", soon: true },
-      { label: "Configuration", to: "/docs/reference/configuration", soon: true },
+      { label: "Observability", to: "/docs/operating/observability" },
+      { label: "High availability", to: "/docs/operating/ha" },
     ],
+  },
+  {
+    title: "Reference",
+    items: [{ label: "Configuration", to: "/docs/reference/configuration" }],
   },
 ];
 

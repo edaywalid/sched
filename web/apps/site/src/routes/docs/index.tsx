@@ -7,18 +7,39 @@ export const Route = createFileRoute("/docs/")({
 const SECTIONS = [
   {
     title: "Get started",
-    body: "Bring up sched on your laptop in three commands.",
-    links: [{ label: "Quickstart", to: "/docs/get-started/quickstart" }],
+    body: "Bring sched up on your laptop and run your first workflow.",
+    links: [
+      { label: "Install", to: "/docs/get-started/install" },
+      { label: "Quickstart", to: "/docs/get-started/quickstart" },
+    ],
   },
   {
     title: "Concepts",
     body: "How workflows, activities, signals, and timers behave under replay.",
-    links: [{ label: "Workflows", to: "/docs/concepts/workflows" }],
+    links: [
+      { label: "Workflows", to: "/docs/concepts/workflows" },
+      { label: "Activities", to: "/docs/concepts/activities" },
+      { label: "Signals", to: "/docs/concepts/signals" },
+      { label: "Timers", to: "/docs/concepts/timers" },
+    ],
   },
   {
     title: "Architecture",
-    body: "What the engine actually does between a StartWorkflow call and a completed result.",
-    links: [{ label: "Architecture overview", to: "/docs/architecture/overview" }],
+    body: "The engine, the replay model, and the durable persistence layer.",
+    links: [
+      { label: "Overview", to: "/docs/architecture/overview" },
+      { label: "Replay model", to: "/docs/architecture/replay" },
+      { label: "Persistence", to: "/docs/architecture/persistence" },
+    ],
+  },
+  {
+    title: "Operating",
+    body: "Observability, high availability, and the full configuration surface.",
+    links: [
+      { label: "Observability", to: "/docs/operating/observability" },
+      { label: "High availability", to: "/docs/operating/ha" },
+      { label: "Configuration", to: "/docs/reference/configuration" },
+    ],
   },
 ];
 

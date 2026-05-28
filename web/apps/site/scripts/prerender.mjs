@@ -9,9 +9,18 @@ const clientDir = join(root, "dist", "client");
 const ROUTES = [
   "/",
   "/docs",
+  "/docs/get-started/install",
   "/docs/get-started/quickstart",
   "/docs/concepts/workflows",
+  "/docs/concepts/activities",
+  "/docs/concepts/signals",
+  "/docs/concepts/timers",
   "/docs/architecture/overview",
+  "/docs/architecture/replay",
+  "/docs/architecture/persistence",
+  "/docs/operating/observability",
+  "/docs/operating/ha",
+  "/docs/reference/configuration",
 ];
 
 const { default: server } = await import(join(root, "dist", "server", "server.js"));
