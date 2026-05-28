@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -96,7 +96,10 @@ func (tm *TimerManager) ScheduleTimer(ctx context.Context, workflowID string, du
 		Type:       EventTypeTimerScheduled,
 		Details:    details,
 	}); err != nil {
-		log.Printf("timer: append scheduled event for %s: %v", timerID, err)
+		slog.Error("timer append scheduled event",
+			slog.String("timer_id", timerID),
+			slog.String("workflow_id", workflowID),
+			slog.Any("error", err))
 	}
 
 	return timerID, nil
@@ -115,7 +118,7 @@ func (tm *TimerManager) RecoverPendingTimers(ctx context.Context) (int, error) {
 	if len(pending) == 0 {
 		return 0, nil
 	}
-	log.Printf("timer: recovered %d pending timer(s) from store", len(pending))
+	slog.Info("timer recovered pending", slog.Int("count", len(pending)))
 	return len(pending), nil
 }
 
@@ -143,7 +146,7 @@ func (tm *TimerManager) fireDue() {
 		// Suppress the noisy log when the store is being torn down in
 		// tests; otherwise surface the failure.
 		if !errors.Is(err, context.Canceled) {
-			log.Printf("timer: fetch due failed: %v", err)
+			slog.Error("timer fetch due failed", slog.Any("error", err))
 		}
 		return
 	}
@@ -157,7 +160,10 @@ func (tm *TimerManager) fireDue() {
 			Type:       EventTypeTimerFired,
 			Details:    details,
 		}); err != nil {
-			log.Printf("timer: append fired event for %s: %v", t.TimerID, err)
+			slog.Error("timer append fired event",
+				slog.String("timer_id", t.TimerID),
+				slog.String("workflow_id", t.WorkflowID),
+				slog.Any("error", err))
 		}
 
 		tm.mu.Lock()
