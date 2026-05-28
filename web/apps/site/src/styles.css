@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "@sched/design/tokens.css";
+
+html {
+  font-feature-settings: "ss01", "cv11";
+  font-variant-numeric: tabular-nums;
+}
+
+:where(button, a):focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
