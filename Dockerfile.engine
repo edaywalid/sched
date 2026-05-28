@@ -28,6 +28,6 @@ COPY --from=builder /app/engine .
 # container if needed (see docker-compose `migrate` service).
 COPY --from=builder /app/migrations ./migrations
 
-EXPOSE 50051
+EXPOSE 50051 9090
 
 CMD ["./engine"]
