@@ -25,7 +25,7 @@ Inspired by Temporal and Cadence. Single Go SDK, single binary, Postgres plus Re
 
 ## Architecture
 
-![Architecture diagram](assets/architecture.png)
+![sched architecture](assets/architecture.svg)
 
 Three processes, two stateful dependencies.
 
@@ -39,6 +39,14 @@ The two data stores hold the entire system of record:
 - **Redis Streams** carries work in flight. Consumer groups give workers exclusive task delivery; the engine's reclaim loop catches anything a crashed worker did not ack.
 
 The longer walkthrough is in the docs site (`web/apps/site/src/content/docs/architecture.mdx`), and the design intent is in [`docs/PRD.md`](docs/PRD.md).
+
+### Workflow lifecycle
+
+How a single workflow lives across the engine's event log, two dispatches, and a one-hour `Sleep`:
+
+![sched workflow lifecycle](assets/lifecycle.svg)
+
+The workflow function runs twice. The first dispatch yields on `Sleep`; the engine writes `TimerScheduled` and frees the worker. When the timer fires, the engine appends `TimerFired` and re-dispatches the task. On the second run, the SDK replays past the recorded commands and reaches the next side-effecting call. Detail in [`docs/architecture/replay`](web/apps/site/src/content/docs/replay.mdx).
 
 ## Quickstart
 

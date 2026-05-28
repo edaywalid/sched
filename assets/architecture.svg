@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 560" role="img" aria-label="sched architecture: workers stream gRPC to the engine; the engine persists state in Postgres and dispatches tasks via Redis Streams, exposing Prometheus metrics and OTLP traces.">
+  <defs>
+    <style>
+      .bg       { fill: #0a0a0a; }
+      .card     { fill: #111113; stroke: #27272a; stroke-width: 1; }
+      .card-acc { fill: #0f1611; stroke: #4d8a4f; stroke-width: 1.5; }
+      .pill     { fill: #151517; stroke: #2d2d31; stroke-width: 1; }
+      .title    { fill: #fafafa; font: 600 16px ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
+      .label    { fill: #d4d4d8; font: 500 13px ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
+      .meta     { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", "SF Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+      .mono     { fill: #a1a1aa; font: 400 12px ui-monospace, "JetBrains Mono", "SF Mono", monospace; }
+      .accent   { fill: #7BC74D; font: 600 12px ui-monospace, "JetBrains Mono", "SF Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+      .arrow    { stroke: #5fa55f; stroke-width: 1.6; fill: none; opacity: 0.85; }
+      .arrow-d  { stroke: #52525b; stroke-width: 1.4; fill: none; opacity: 0.7; }
+      .arrow-l  { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; }
+    </style>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5fa55f" />
+    </marker>
+    <marker id="ah-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52525b" />
+    </marker>
+    <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#1c1c1f" />
+    </pattern>
+  </defs>
+
+  <rect class="bg" width="1040" height="560" />
+  <rect width="1040" height="560" fill="url(#dots)" opacity="0.5" />
+
+  <!-- Section eyebrows -->
+  <text x="100" y="50" text-anchor="middle" class="meta">Workers</text>
+  <text x="520" y="50" text-anchor="middle" class="meta">Engine</text>
+  <text x="900" y="50" text-anchor="middle" class="meta">Stores</text>
+
+  <!-- Workers (left column) -->
+  <g transform="translate(40, 80)">
+    <rect class="card" x="0" y="0" width="160" height="60" rx="10" />
+    <text class="title" x="20" y="28">Worker</text>
+    <text class="mono"  x="20" y="48">sdk.Client</text>
+  </g>
+  <g transform="translate(40, 165)">
+    <rect class="card" x="0" y="0" width="160" height="60" rx="10" />
+    <text class="title" x="20" y="28">Worker</text>
+    <text class="mono"  x="20" y="48">sdk.Client</text>
+  </g>
+  <g transform="translate(40, 250)">
+    <rect class="card" x="0" y="0" width="160" height="60" rx="10" />
+    <text class="title" x="20" y="28">Worker</text>
+    <text class="mono"  x="20" y="48">sdk.Client</text>
+  </g>
+  <text class="mono" x="120" y="345" text-anchor="middle">stateless, scale horizontally</text>
+
+  <!-- Engine (center) -->
+  <g transform="translate(360, 80)">
+    <rect class="card-acc" x="0" y="0" width="320" height="320" rx="14" />
+    <text class="title"  x="20" y="32">Engine</text>
+    <text class="mono"   x="20" y="54">sched-engine</text>
+
+    <!-- Inner pills: subsystems -->
+    <g transform="translate(20, 80)">
+      <rect class="pill" x="0" y="0" width="280" height="46" rx="8" />
+      <text class="label" x="16" y="20">gRPC frontend</text>
+      <text class="mono"  x="16" y="36">StartWorkflow · SignalWorkflow · Stream*</text>
+    </g>
+    <g transform="translate(20, 134)">
+      <rect class="pill" x="0" y="0" width="280" height="46" rx="8" />
+      <text class="label" x="16" y="20">Dispatcher</text>
+      <text class="mono"  x="16" y="36">Redis Streams · XADD / XREADGROUP / XACK</text>
+    </g>
+    <g transform="translate(20, 188)">
+      <rect class="pill" x="0" y="0" width="280" height="46" rx="8" />
+      <text class="label" x="16" y="20">Timer manager</text>
+      <text class="mono"  x="16" y="36">Postgres poll · FOR UPDATE SKIP LOCKED</text>
+    </g>
+    <g transform="translate(20, 242)">
+      <rect class="pill" x="0" y="0" width="280" height="46" rx="8" />
+      <text class="label" x="16" y="20">Leader election</text>
+      <text class="mono"  x="16" y="36">pg_try_advisory_lock</text>
+    </g>
+  </g>
+
+  <!-- Postgres (right top) -->
+  <g transform="translate(820, 80)">
+    <rect class="card" x="0" y="0" width="180" height="140" rx="10" />
+    <text class="title" x="20" y="28">Postgres</text>
+    <text class="mono"  x="20" y="54">workflow_executions</text>
+    <text class="mono"  x="20" y="74">workflow_events</text>
+    <text class="mono"  x="20" y="94">timers</text>
+    <text class="mono"  x="20" y="114">tasks (legacy)</text>
+  </g>
+
+  <!-- Redis Streams (right middle) -->
+  <g transform="translate(820, 240)">
+    <rect class="card" x="0" y="0" width="180" height="100" rx="10" />
+    <text class="title" x="20" y="28">Redis Streams</text>
+    <text class="mono"  x="20" y="54">tasks:wf:default</text>
+    <text class="mono"  x="20" y="74">tasks:act:default</text>
+  </g>
+
+  <!-- Observability strip (bottom) -->
+  <g transform="translate(360, 440)">
+    <rect class="card" x="0" y="0" width="320" height="80" rx="10" />
+    <text class="title" x="20" y="30">Observability</text>
+    <text class="mono"  x="20" y="52">slog · Prometheus :9090 · OTLP /traces</text>
+    <text class="mono"  x="20" y="68">otelgrpc client + server interceptors</text>
+  </g>
+
+  <!-- Arrows: workers <-> engine (bidi) -->
+  <path class="arrow"   d="M 200 110 C 270 110, 290 200, 358 200" marker-end="url(#ah)" />
+  <path class="arrow"   d="M 200 195 L 358 232"                    marker-end="url(#ah)" />
+  <path class="arrow"   d="M 200 280 C 270 280, 290 264, 358 264" marker-end="url(#ah)" />
+  <text class="arrow-l" x="280" y="100" text-anchor="middle">bidi gRPC</text>
+
+  <!-- Arrows: engine -> postgres / redis -->
+  <path class="arrow"   d="M 680 150 L 816 150" marker-end="url(#ah)" />
+  <path class="arrow"   d="M 680 290 L 816 290" marker-end="url(#ah)" />
+  <text class="arrow-l" x="748" y="142" text-anchor="middle">SQL</text>
+  <text class="arrow-l" x="748" y="282" text-anchor="middle">XADD / XACK</text>
+
+  <!-- Arrow: engine -> observability -->
+  <path class="arrow-d" d="M 520 400 L 520 436" marker-end="url(#ah-d)" />
+
+  <!-- Caption -->
+  <text x="520" y="544" text-anchor="middle" class="mono" opacity="0.7">Three processes, two stateful dependencies.</text>
+</svg>

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 360" role="img" aria-label="A workflow lifecycle: events are appended to history; workflow function yields on Sleep; engine fires the timer and re-dispatches; replay skips recorded commands and reaches the next yield point.">
+  <defs>
+    <style>
+      .bg     { fill: #0a0a0a; }
+      .swim   { fill: #0e0e10; stroke: #1f1f23; stroke-width: 1; }
+      .ev     { fill: #131316; stroke: #2d2d31; stroke-width: 1; }
+      .ev-acc { fill: #0f1611; stroke: #4d8a4f; stroke-width: 1.5; }
+      .ev-y   { fill: #15110a; stroke: #806a3c; stroke-width: 1.5; }
+      .title  { fill: #fafafa; font: 600 14px ui-sans-serif, system-ui, sans-serif; }
+      .lane   { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+      .ev-l   { fill: #d4d4d8; font: 500 11px ui-monospace, "JetBrains Mono", monospace; }
+      .ev-l-acc { fill: #7BC74D; font: 600 11px ui-monospace, "JetBrains Mono", monospace; }
+      .ev-l-y { fill: #d4a849; font: 600 11px ui-monospace, "JetBrains Mono", monospace; }
+      .caption{ fill: #71717a; font: 400 11px ui-monospace, "JetBrains Mono", monospace; }
+      .axis   { stroke: #27272a; stroke-width: 1; opacity: 0.6; }
+      .yieldln{ stroke: #806a3c; stroke-width: 1; stroke-dasharray: 4 3; opacity: 0.6; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1040" height="360" />
+
+  <!-- Lane labels -->
+  <text class="lane" x="24" y="80">Workflow fn</text>
+  <text class="lane" x="24" y="180">Engine</text>
+  <text class="lane" x="24" y="280">Time</text>
+
+  <!-- Swim lanes -->
+  <rect class="swim" x="140" y="50"  width="880" height="60" rx="8" />
+  <rect class="swim" x="140" y="150" width="880" height="60" rx="8" />
+
+  <!-- Time axis -->
+  <line class="axis" x1="140" y1="280" x2="1020" y2="280" />
+  <circle cx="180"  cy="280" r="3" fill="#52525b" />
+  <circle cx="380"  cy="280" r="3" fill="#52525b" />
+  <circle cx="560"  cy="280" r="3" fill="#52525b" />
+  <circle cx="740"  cy="280" r="3" fill="#52525b" />
+  <circle cx="940"  cy="280" r="3" fill="#52525b" />
+  <text class="caption" x="180" y="305" text-anchor="middle">t0</text>
+  <text class="caption" x="380" y="305" text-anchor="middle">t0+ms</text>
+  <text class="caption" x="560" y="305" text-anchor="middle">yield</text>
+  <text class="caption" x="740" y="305" text-anchor="middle">t0+1h</text>
+  <text class="caption" x="940" y="305" text-anchor="middle">complete</text>
+
+  <!-- Yield divider -->
+  <line class="yieldln" x1="560" y1="40" x2="560" y2="320" />
+  <text class="caption" x="560" y="36" text-anchor="middle">first dispatch ends here · second dispatch starts after the timer</text>
+
+  <!-- Workflow fn events -->
+  <g transform="translate(160, 60)">
+    <rect class="ev" x="0" y="0" width="180" height="40" rx="6" />
+    <text class="ev-l" x="12" y="16">ctx.QueueActivity</text>
+    <text class="ev-l" x="12" y="32">("LoadRows")</text>
+  </g>
+  <g transform="translate(360, 60)">
+    <rect class="ev-y" x="0" y="0" width="180" height="40" rx="6" />
+    <text class="ev-l-y" x="12" y="16">ctx.Sleep(1h)</text>
+    <text class="ev-l-y" x="12" y="32">→ yield panic</text>
+  </g>
+  <g transform="translate(580, 60)">
+    <rect class="ev" x="0" y="0" width="180" height="40" rx="6" />
+    <text class="ev-l" x="12" y="16">replay: QueueActivity</text>
+    <text class="ev-l" x="12" y="32">cursor advances</text>
+  </g>
+  <g transform="translate(780, 60)">
+    <rect class="ev-acc" x="0" y="0" width="180" height="40" rx="6" />
+    <text class="ev-l-acc" x="12" y="16">ctx.QueueActivity</text>
+    <text class="ev-l-acc" x="12" y="32">("Mail")</text>
+  </g>
+
+  <!-- Engine events -->
+  <g transform="translate(160, 160)">
+    <rect class="ev" x="0" y="0" width="180" height="40" rx="6" />
+    <text class="ev-l" x="12" y="16">ActivityScheduled</text>
+    <text class="ev-l" x="12" y="32">ActivityCompleted</text>
+  </g>
+  <g transform="translate(360, 160)">
+    <rect class="ev-y" x="0" y="0" width="180" height="40" rx="6" />
+    <text class="ev-l-y" x="12" y="16">TimerScheduled</text>
+    <text class="ev-l-y" x="12" y="32">awaiting timer</text>
+  </g>
+  <g transform="translate(580, 160)">
+    <rect class="ev" x="0" y="0" width="180" height="40" rx="6" />
+    <text class="ev-l" x="12" y="16">TimerFired</text>
+    <text class="ev-l" x="12" y="32">re-enqueue task</text>
+  </g>
+  <g transform="translate(780, 160)">
+    <rect class="ev-acc" x="0" y="0" width="180" height="40" rx="6" />
+    <text class="ev-l-acc" x="12" y="16">ActivityScheduled</text>
+    <text class="ev-l-acc" x="12" y="32">WorkflowCompleted</text>
+  </g>
+</svg>
