@@ -1,4 +1,4 @@
-.PHONY: help build up down logs restart clean test proto migrate-up migrate-down migrate-new sqlc-gen
+.PHONY: help build up down logs restart clean test proto migrate-up migrate-down migrate-new sqlc-gen lint
 
 # Default Postgres DSN for local migrations (mirrors docker-compose.yml).
 POSTGRES_DSN ?= postgres://sched:sched_password@localhost:5432/sched?sslmode=disable
@@ -21,6 +21,7 @@ help:
 	@echo "  make migrate-down   - Roll back the last migration"
 	@echo "  make migrate-new NAME=x - Create a new migration pair"
 	@echo "  make sqlc-gen       - Regenerate sqlc query bindings"
+	@echo "  make lint           - Run golangci-lint across the module"
 	@echo "  make test           - Run tests"
 	@echo "  make test-workflow  - Start test workflows"
 	@echo "  make dev            - Run in development mode"
@@ -162,3 +163,12 @@ migrate-new:
 # Regenerate sqlc query bindings under internal/store/db/.
 sqlc-gen:
 	cd internal/store && sqlc generate
+
+# Run golangci-lint against the whole module. Installs the linter on
+# first use if it is not already on PATH.
+lint:
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "Installing golangci-lint v2.7.2"; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.2; \
+	fi
+	golangci-lint run ./...
