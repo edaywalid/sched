@@ -30,12 +30,14 @@ Your worker is not holding a thread for 24 hours. There is no in-memory timer. T
 
 The `timers` table:
 
-```
-timer_id     TEXT PRIMARY KEY
-workflow_id  TEXT REFERENCES workflow_executions(workflow_id)
-fire_at      TIMESTAMPTZ NOT NULL
-fired        BOOLEAN NOT NULL DEFAULT FALSE
-created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+```sql
+CREATE TABLE timers (
+  timer_id    TEXT PRIMARY KEY,
+  workflow_id TEXT REFERENCES workflow_executions(workflow_id),
+  fire_at     TIMESTAMPTZ NOT NULL,
+  fired       BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 ```
 
 A partial index over `fire_at WHERE NOT fired` keeps the timer poll cheap even when total timer count grows. The timer manager fetches due rows with `FOR UPDATE SKIP LOCKED` so multiple engine instances in active-passive HA cannot double-fire the same timer.

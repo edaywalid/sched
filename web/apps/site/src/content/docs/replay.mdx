@@ -77,11 +77,17 @@ The cursor only moves forward, only on matches. This is why workflows must be de
 
 Every time a worker receives a workflow task, it gets the **full history** for that workflow:
 
-```
+```text
 Task {
   workflow_id: "wf-abc"
-  input:        ...
-  history:      [WorkflowStarted, ActivityScheduled(A), ActivityCompleted(A), TimerScheduled(t1), TimerFired(t1)]
+  input:       { ... }
+  history: [
+    WorkflowStarted,
+    ActivityScheduled(A),
+    ActivityCompleted(A),
+    TimerScheduled(t1),
+    TimerFired(t1),
+  ]
 }
 ```
 
@@ -98,19 +104,20 @@ Notice step 5: the new command is the only one that actually hits the engine. St
 
 ## Yield and resume in one diagram
 
-```
-First dispatch:
-  workflow() ──[Schedule A]── engine ──[ActivityScheduled, ActivityCompleted to history]──
-  workflow() ──[Sleep 1h]──── engine ──[TimerScheduled to history, yield]──
+```text
+FIRST DISPATCH
+  workflow() : Schedule A    -> engine writes ActivityScheduled, ActivityCompleted
+  workflow() : Sleep 1h      -> engine writes TimerScheduled, workflow yields
   worker reports yielded=true
 
-Engine waits. Timer fires after 1h. Engine appends TimerFired, enqueues next task.
+  ... engine waits 1h ...
+  timer fires, engine appends TimerFired, enqueues next task.
 
-Second dispatch (with extended history):
-  workflow() ──[Schedule A]──── replay finds ActivityScheduled, skips
-  workflow() ──[Sleep 1h]────── replay finds TimerScheduled + TimerFired, skips
-  workflow() ──[Schedule B]──── replay finds nothing, sends new RPC
-  workflow() ──[return "done"]─ worker reports success
+SECOND DISPATCH (with extended history)
+  workflow() : Schedule A    -> replay finds ActivityScheduled, skips
+  workflow() : Sleep 1h      -> replay finds TimerScheduled + TimerFired, skips
+  workflow() : Schedule B    -> no matching event, sends new RPC
+  workflow() : return "done" -> worker reports success
 ```
 
 The workflow function gets called twice. The first call yields at the sleep. The second call replays past the activity and the sleep, then makes the new RPC for `B`, then returns. From the workflow author's perspective, it is one continuous function. From the engine's, it is two independent dispatches gated by a durable timer.

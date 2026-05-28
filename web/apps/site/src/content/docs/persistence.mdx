@@ -4,12 +4,12 @@ Every durable piece of sched state lives in Postgres. Four tables hold the entir
 
 ## Schema overview
 
-```
-workflow_executions  ── one row per workflow (state, input, result)
-workflow_events      ── append-only history per workflow
-tasks                ── workflow + activity tasks in flight (legacy; Phase 2 promotes to Redis Streams)
-timers               ── pending Sleep and retry timers
-```
+| Table                 | Purpose                                                             |
+| --------------------- | ------------------------------------------------------------------- |
+| `workflow_executions` | One row per workflow with current state, input, and result          |
+| `workflow_events`     | Append-only history per workflow                                    |
+| `tasks`               | Workflow + activity tasks in flight (in-memory queue mode only)     |
+| `timers`              | Pending `Sleep` and retry timers                                    |
 
 Schemas live in [`migrations/`](https://github.com/edaywalid/sched/tree/main/migrations) as `golang-migrate` files. The current schema is `000001_init.up.sql`.
 
