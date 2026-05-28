@@ -18,10 +18,11 @@ Currently shipping toward production-grade per the
 | Activity heartbeats                   | shipped  | `RecordActivityHeartbeat` extends visibility timeout    |
 | Structured logging (slog)             | shipped  | JSON or text, level via env                             |
 | Prometheus metrics                    | shipped  | `/metrics` on the engine                                |
+| golangci-lint and GitHub Actions CI   | shipped  | `make lint`; CI runs build, test, lint with Postgres+Redis services |
 | `Sleep` survives worker crash         | planned  | Phase 3.4. Needs event-sourced replay first.            |
 | Workflow queries                      | planned  | Phase 3.4                                               |
 | Sharded engine for HA                 | planned  | Phase 4                                                 |
-| OpenTelemetry tracing, lint, CI       | planned  | Phase 5.3 onward                                        |
+| OpenTelemetry tracing                 | planned  | Phase 5.4                                               |
 
 ## Architecture
 
