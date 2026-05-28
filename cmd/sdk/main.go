@@ -53,6 +53,20 @@ func main() {
 		return fmt.Sprintf("Greeted %v", input), nil
 	})
 
+	// AlwaysFail is wired to the RetryDemo workflow to exercise the
+	// activity retry path. Each invocation returns an error so the
+	// engine schedules backoff retries up to RetryPolicy.MaximumAttempts.
+	client.RegisterActivity("AlwaysFail", func(ctx sdk.ActivityContext, input any) (any, error) {
+		log.Printf("AlwaysFail invoked (input=%v)\n", input)
+		return nil, fmt.Errorf("intentional failure for input %v", input)
+	})
+
+	client.RegisterWorkflow("RetryDemo", func(ctx sdk.WorkflowContext, input any) (any, error) {
+		log.Println("RetryDemo workflow started!")
+		ctx.QueueActivity("AlwaysFail", input)
+		return "retry demo done", nil
+	})
+
 	  
 	bgCtx := context.Background()
 

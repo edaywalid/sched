@@ -70,6 +70,10 @@ type pendingActivityTask struct {
 	TaskToken    string
 	WorkflowID   string
 	ActivityName string
+	Input        []byte
+	Attempt      int32
+	MaxAttempts  int32
+	Policy       RetryPolicy
 	AckToken     string
 	QueueName    string
 	DequeuedAt   time.Time
@@ -85,9 +89,12 @@ type workflowEnvelope struct {
 }
 
 type activityEnvelope struct {
-	WorkflowID   string `json:"workflow_id"`
-	ActivityName string `json:"activity_name"`
-	Input        []byte `json:"input"`
+	WorkflowID   string      `json:"workflow_id"`
+	ActivityName string      `json:"activity_name"`
+	Input        []byte      `json:"input"`
+	Attempt      int32       `json:"attempt"`
+	MaxAttempts  int32       `json:"max_attempts"`
+	Policy       RetryPolicy `json:"retry_policy"`
 }
 
 func NewEngineServer(engine *Engine, q queue.Queue) *EngineServer {
@@ -279,6 +286,10 @@ func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActi
 		TaskToken:    taskToken,
 		WorkflowID:   env.WorkflowID,
 		ActivityName: env.ActivityName,
+		Input:        env.Input,
+		Attempt:      env.Attempt,
+		MaxAttempts:  env.MaxAttempts,
+		Policy:       env.Policy,
 		AckToken:     msg.AckToken,
 		QueueName:    queueName,
 		DequeuedAt:   time.Now(),
@@ -306,6 +317,7 @@ func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.Complete
 	if req.Error != "" {
 		failed, _ := json.Marshal(map[string]any{
 			"activity_name": pending.ActivityName,
+			"attempt":       pending.Attempt,
 			"error":         req.Error,
 		})
 		_ = s.engine.store.AppendEvent(ctx, store.Event{
@@ -313,9 +325,14 @@ func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.Complete
 			Type:       EventTypeActivityFailed,
 			Details:    failed,
 		})
+
+		if pending.Attempt < pending.MaxAttempts {
+			s.scheduleActivityRetry(ctx, pending)
+		}
 	} else {
 		done, _ := json.Marshal(map[string]any{
 			"activity_name": pending.ActivityName,
+			"attempt":       pending.Attempt,
 			"result":        json.RawMessage(req.Result),
 		})
 		_ = s.engine.store.AppendEvent(ctx, store.Event{
@@ -330,6 +347,52 @@ func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.Complete
 	}
 
 	return &proto.CompleteActivityResponse{Success: true}, nil
+}
+
+// scheduleActivityRetry computes the next-attempt backoff per the
+// activity's RetryPolicy, schedules a durable timer, and arranges for
+// the timer callback to re-enqueue the activity envelope with
+// attempt+1.
+func (s *EngineServer) scheduleActivityRetry(ctx context.Context, pending *pendingActivityTask) {
+	nextAttempt := pending.Attempt + 1
+	delay := pending.Policy.BackoffFor(int(nextAttempt))
+
+	retryEvent, _ := json.Marshal(map[string]any{
+		"activity_name": pending.ActivityName,
+		"attempt":       nextAttempt,
+		"delay":         delay.String(),
+	})
+	_ = s.engine.store.AppendEvent(ctx, store.Event{
+		WorkflowID: pending.WorkflowID,
+		Type:       EventTypeActivityRetryScheduled,
+		Details:    retryEvent,
+	})
+
+	queueName := pending.QueueName
+	envelope, err := json.Marshal(activityEnvelope{
+		WorkflowID:   pending.WorkflowID,
+		ActivityName: pending.ActivityName,
+		Input:        pending.Input,
+		Attempt:      nextAttempt,
+		MaxAttempts:  pending.MaxAttempts,
+		Policy:       pending.Policy,
+	})
+	if err != nil {
+		log.Printf("activity retry: marshal envelope: %v", err)
+		return
+	}
+
+	cb := func() {
+		retryCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.queue.Enqueue(retryCtx, queueName, envelope); err != nil {
+			log.Printf("activity retry: re-enqueue failed: %v", err)
+		}
+	}
+
+	if _, err := s.engine.timerMgr.ScheduleTimer(ctx, pending.WorkflowID, delay, cb); err != nil {
+		log.Printf("activity retry: schedule timer failed: %v", err)
+	}
 }
 
 func (s *EngineServer) ScheduleActivity(ctx context.Context, req *proto.ScheduleActivityRequest) (*proto.ScheduleActivityResponse, error) {
@@ -347,10 +410,14 @@ func (s *EngineServer) ScheduleActivity(ctx context.Context, req *proto.Schedule
 		return nil, fmt.Errorf("record scheduled activity: %w", err)
 	}
 
+	policy := DefaultRetryPolicy()
 	envelope, err := json.Marshal(activityEnvelope{
 		WorkflowID:   req.WorkflowId,
 		ActivityName: req.ActivityName,
 		Input:        req.Input,
+		Attempt:      1,
+		MaxAttempts:  int32(policy.MaximumAttempts),
+		Policy:       policy,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("marshal activity envelope: %w", err)
