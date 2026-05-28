@@ -1,0 +1,156 @@
+# Replay model
+
+The replay model is the heart of how sched stays durable across crashes. It is also the source of every constraint you encounter when writing workflows. This page explains the mechanic in detail.
+
+## The problem
+
+A workflow function looks like normal Go:
+
+```go
+func MyWorkflow(ctx sdk.WorkflowContext, _ any) (any, error) {
+    ctx.QueueActivity("A", nil)
+    ctx.Sleep(1 * time.Hour)
+    ctx.QueueActivity("B", nil)
+    return "done", nil
+}
+```
+
+But "normal Go" cannot survive a worker crash mid-execution. If the worker dies after queueing `A` but before reaching `Sleep`, where does the resumed run pick up? You cannot serialize a goroutine's stack frame, and even if you could, the gRPC connections and channels would be invalid after restart.
+
+The replay model sidesteps the problem entirely. It does not preserve a paused goroutine. It re-runs the workflow function from the top, using the recorded history of what already happened to make the function take the same path it took before.
+
+## The yield sentinel
+
+When a workflow primitive needs to wait — `Sleep`, `WaitForSignal`, or anything else that cannot complete synchronously — the SDK panics with a typed sentinel:
+
+```go
+// sdk/replay.go
+type yieldErr struct {
+    command string
+}
+
+func IsYield(r any) bool {
+    _, ok := r.(yieldErr)
+    return ok
+}
+```
+
+The worker's task-execution loop is wrapped in `defer recover()`:
+
+```go
+func() {
+    defer func() {
+        if r := recover(); r != nil {
+            if IsYield(r) {
+                yielded = true
+                return
+            }
+            panic(r) // not a yield, propagate
+        }
+    }()
+    result, err = workflowFn(ctx, input)
+}()
+```
+
+If the panic is a yield, the worker reports the task as yielded and stops running. If it is anything else (your code panicked for real), the panic is re-raised and the SDK handles it as a workflow failure.
+
+## The replay cursor
+
+Before the workflow function runs, the SDK constructs a `replayState` from the workflow's history:
+
+```go
+type replayState struct {
+    history []*proto.WorkflowEvent
+    cursor  int
+}
+```
+
+The cursor starts at `0`. As the workflow function calls primitives, each one consults the cursor:
+
+- **`QueueActivity("A", ...)`** scans from `cursor` for the next `ActivityScheduled` event with `activity_name == "A"`. If found, advances the cursor past it and returns immediately. The engine already recorded that this activity was scheduled on a previous run; do not send the RPC again. If not found, the scheduling RPC fires and the cursor stays put.
+- **`Sleep(d)`** scans for `TimerScheduled` from the cursor. If found, also scans for the matching `TimerFired`. If both exist, the timer already fired; advance past both and return. If only `TimerScheduled` exists, the engine knows about the timer but it has not fired yet; yield. If neither exists, register the timer and yield.
+- **`WaitForSignal(timeout)`** scans for the next `SignalReceived` from the cursor. If found, advance and return the recorded signal. If not, yield.
+
+The cursor only moves forward, only on matches. This is why workflows must be deterministic: the same input plus the same history must produce the same sequence of primitive calls in the same order, or the cursor diverges from the history and the replay reports the wrong values.
+
+## What a dispatch looks like
+
+Every time a worker receives a workflow task, it gets the **full history** for that workflow:
+
+```
+Task {
+  workflow_id: "wf-abc"
+  input:        ...
+  history:      [WorkflowStarted, ActivityScheduled(A), ActivityCompleted(A), TimerScheduled(t1), TimerFired(t1)]
+}
+```
+
+The worker:
+
+1. Constructs a fresh `replayState` from `history`.
+2. Calls `workflowFn(ctx, input)`.
+3. The function calls `QueueActivity("A", nil)`. Replay finds `ActivityScheduled(A)` at index 1, advances cursor to 2, returns. No RPC.
+4. The function calls `Sleep(1 * time.Hour)`. Replay finds `TimerScheduled(t1)` at index 3 and `TimerFired(t1)` at index 4, advances cursor to 5, returns. No RPC.
+5. The function calls `QueueActivity("B", nil)`. Replay finds no matching event in the remaining history. The SDK sends `ScheduleActivity("B")` and the cursor stays at 5.
+6. The function returns `"done", nil`. The SDK completes the workflow task with the result.
+
+Notice step 5: the new command is the only one that actually hits the engine. Steps 3 and 4 are completely local.
+
+## Yield and resume in one diagram
+
+```
+First dispatch:
+  workflow() ──[Schedule A]── engine ──[ActivityScheduled, ActivityCompleted to history]──
+  workflow() ──[Sleep 1h]──── engine ──[TimerScheduled to history, yield]──
+  worker reports yielded=true
+
+Engine waits. Timer fires after 1h. Engine appends TimerFired, enqueues next task.
+
+Second dispatch (with extended history):
+  workflow() ──[Schedule A]──── replay finds ActivityScheduled, skips
+  workflow() ──[Sleep 1h]────── replay finds TimerScheduled + TimerFired, skips
+  workflow() ──[Schedule B]──── replay finds nothing, sends new RPC
+  workflow() ──[return "done"]─ worker reports success
+```
+
+The workflow function gets called twice. The first call yields at the sleep. The second call replays past the activity and the sleep, then makes the new RPC for `B`, then returns. From the workflow author's perspective, it is one continuous function. From the engine's, it is two independent dispatches gated by a durable timer.
+
+## Determinism: the hard constraint
+
+Because the workflow function gets re-run, anything non-deterministic inside it will diverge between runs. The classic offenders:
+
+- **`time.Now()`** returns a different value each time the function runs. Use `ctx.Sleep` for waits; use activities for "what is the current timestamp."
+- **`math/rand`** with unseeded or current-time seeds produces different values. Either seed deterministically from the workflow ID, or generate the random value in an activity.
+- **Network calls.** Even an idempotent GET may return different bodies. Activities exist for this.
+- **Goroutines and channels.** Race conditions inside a workflow are catastrophic for replay. Stay sequential.
+- **Map iteration order.** Go maps iterate in random order. Sort keys before iterating.
+- **Reading mutable global state.** Anything outside the function arguments and the history is off-limits.
+
+Activities are the escape hatch. Inside an activity, anything goes; the engine treats its return value as the truth and replays write that exact return value into history.
+
+## What you cannot do
+
+- **Spawn a workflow goroutine that runs forever.** It will be re-spawned on every replay. There is no such thing as a long-running background task inside a workflow.
+- **Call into external services without going through an activity.** The replay will hit the service every time.
+- **Branch on `time.Now()`.** First run might take the `if` branch; replay might take the `else`. Use a recorded value: schedule an activity that returns a timestamp, then branch on its result.
+- **Compute durations from wall-clock.** "How long has this workflow been running" is not a durable quantity. The engine records `start_time` on the workflow row, accessible through queries.
+
+## How history is built
+
+Every command the workflow issues produces an event. Every external interaction (signal arriving, timer firing, activity completing) produces an event. The engine writes these to the `workflow_events` table in a single transaction with whatever else it is doing (e.g., enqueueing the next task).
+
+The result is a strictly increasing event log. The events table has `(workflow_id, idx)` as primary key, with `idx` autoincremented per workflow. This is the "tape" the replay model reads from.
+
+## When replay does not happen
+
+A few cases skip replay entirely:
+
+- **First dispatch.** History is just `WorkflowStarted`. The function runs from scratch.
+- **Pure forward progress.** A workflow that has run through every recorded event without yielding completes immediately and never replays.
+- **Failed workflows.** Once `WorkflowFailed` or `WorkflowCompleted` is in history, no further dispatch happens.
+
+## What to read next
+
+- [Workflows](/docs/concepts/workflows) for the author-facing rules.
+- [Persistence](/docs/architecture/persistence) for the event-log table layout.
+- [Architecture overview](/docs/architecture/overview) for the surrounding system.

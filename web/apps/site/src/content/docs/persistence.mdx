@@ -1,0 +1,145 @@
+# Persistence
+
+Every durable piece of sched state lives in Postgres. Four tables hold the entire system of record.
+
+## Schema overview
+
+```
+workflow_executions  ── one row per workflow (state, input, result)
+workflow_events      ── append-only history per workflow
+tasks                ── workflow + activity tasks in flight (legacy; Phase 2 promotes to Redis Streams)
+timers               ── pending Sleep and retry timers
+```
+
+Schemas live in [`migrations/`](https://github.com/edaywalid/sched/tree/main/migrations) as `golang-migrate` files. The current schema is `000001_init.up.sql`.
+
+## workflow_executions
+
+One row per workflow. The state column drives dashboard filters and the workflow lifecycle.
+
+| Column      | Type        | Notes                                  |
+| ----------- | ----------- | -------------------------------------- |
+| workflow_id | TEXT PK     | Client-assigned or generated UUID      |
+| run_id      | TEXT        | Stable across retries                  |
+| name        | TEXT        | The registered workflow name           |
+| status      | TEXT        | `RUNNING`, `COMPLETED`, `FAILED`, `CANCELED`, `TIMED_OUT` |
+| input       | JSONB       | The argument passed to `StartWorkflow` |
+| result      | JSONB       | Set when the workflow returns         |
+| error       | TEXT        | Set on `FAILED`                        |
+| start_time  | TIMESTAMPTZ | When the row was first created         |
+| end_time    | TIMESTAMPTZ | When status moved to a terminal value  |
+| version     | INTEGER     | Optimistic concurrency token           |
+
+Indexes:
+
+- `workflow_executions_status_start_idx (status, start_time DESC)` — dashboard "running first, newest first" listings.
+- `workflow_executions_name_idx (name)` — filter by workflow name.
+
+## workflow_events
+
+The event log. This table is the source of truth for replay. Once a row is written it is never updated; mutation is append-only.
+
+| Column      | Type        | Notes                                   |
+| ----------- | ----------- | --------------------------------------- |
+| workflow_id | TEXT FK     | References `workflow_executions`        |
+| idx         | BIGINT      | Auto-incremented per workflow           |
+| event_type  | TEXT        | One of the lifecycle event names below  |
+| timestamp   | TIMESTAMPTZ | Server-assigned at append time          |
+| details     | JSONB       | Event-specific payload (see [Event types](#event-types)) |
+
+Primary key: `(workflow_id, idx)`. The composite PK means events are naturally ordered per workflow and the timeline-rendering query is `SELECT * WHERE workflow_id = $1 ORDER BY idx ASC`.
+
+Secondary index: `workflow_events_timestamp_idx (timestamp DESC)` — for "what happened in the last 30 seconds across all workflows" diagnostics.
+
+## tasks
+
+Workflow and activity tasks the engine has dispatched but workers have not acked. The table predates the Redis Streams queue and now backs only the in-memory queue mode (used in tests and the no-Redis fallback).
+
+| Column             | Type        | Notes                                 |
+| ------------------ | ----------- | ------------------------------------- |
+| task_token         | TEXT PK     | Engine-generated, opaque to workers   |
+| workflow_id        | TEXT FK     | Parent workflow                       |
+| kind               | TEXT        | `WORKFLOW` or `ACTIVITY`              |
+| activity_name      | TEXT        | Only set for activity tasks           |
+| input              | JSONB       | The task payload                      |
+| status             | TEXT        | `PENDING`, `IN_FLIGHT`, `COMPLETED`   |
+| claim_token        | TEXT        | Set when a worker is processing      |
+| visibility_timeout | TIMESTAMPTZ | Reclaim deadline                      |
+| created_at         | TIMESTAMPTZ |                                       |
+
+Index: `tasks_status_kind_idx (status, kind, created_at)`.
+
+Under the Redis Streams queue (default for production), this table is unused; tasks flow through `XADD`/`XREADGROUP`/`XACK` against `tasks:wf:<queue>` and `tasks:act:<queue>` streams. The in-memory mode keeps the table for symmetry; ephemeral usage means the rows do not need to survive engine restart.
+
+## timers
+
+Pending durable timers. The timer manager polls this table to discover what should fire.
+
+| Column      | Type        | Notes                                  |
+| ----------- | ----------- | -------------------------------------- |
+| timer_id    | TEXT PK     | Engine-generated                       |
+| workflow_id | TEXT FK     | Parent workflow                        |
+| fire_at     | TIMESTAMPTZ | When the timer should fire             |
+| fired       | BOOLEAN     | Default `FALSE`; set `TRUE` after fire |
+| created_at  | TIMESTAMPTZ |                                        |
+
+Index: `timers_pending_idx (fire_at) WHERE NOT fired` — a partial index over only unfired rows keeps `FetchDueTimers` cheap even as fired rows accumulate.
+
+Fetching due timers uses `FOR UPDATE SKIP LOCKED` so multiple engine instances in active-passive HA cannot double-fire the same timer.
+
+## Event types
+
+Every workflow event lands in `workflow_events.event_type` with a JSONB `details` payload. The full list:
+
+| Event type                | Fires                                                                |
+| ------------------------- | -------------------------------------------------------------------- |
+| `WorkflowStarted`         | `StartWorkflow` RPC succeeds and enqueues the first workflow task    |
+| `ActivityScheduled`       | Workflow calls `QueueActivity`                                       |
+| `ActivityCompleted`       | Activity returns success                                             |
+| `ActivityFailed`          | Activity returns error and the retry policy is exhausted             |
+| `ActivityRetryScheduled`  | Activity returned error and the engine scheduled a retry timer       |
+| `TimerScheduled`          | Workflow calls `Sleep`, or the retry policy registers a backoff timer|
+| `TimerFired`              | `timers.fire_at` passes and the timer manager fires the row          |
+| `SignalReceived`          | External caller invokes `SignalWorkflow`                             |
+| `WorkflowCompleted`       | Workflow function returns successfully                               |
+| `WorkflowFailed`          | Workflow function returns an error                                   |
+| `WorkflowTimedOut`        | `workflow_execution_timeout_seconds` elapses                         |
+| `WorkflowCancelRequested` | External caller invokes `CancelWorkflow`                             |
+| `WorkflowCanceled`        | Cancelled workflow task finally completes                            |
+| `WorkflowTaskYielded`     | Workflow yielded on `Sleep` or `WaitForSignal`                       |
+
+The `details` JSON shape is event-specific. `ActivityScheduled` carries `{activity_name, input}`; `TimerScheduled` carries `{timer_id, fire_at}`; `SignalReceived` carries `{signal_name, input}`. These are stable shapes; future versions may add fields but will not rename existing ones.
+
+## Store interface
+
+All persistence goes through one Go interface, `internal/store.Store`. A real implementation backed by pgx + sqlc lives in `internal/store/pgstore.go`; an in-memory implementation for tests lives in `internal/store/memstore.go`. The engine selects between them based on whether `SCHED_POSTGRES_DSN` is set.
+
+Queries are generated by [sqlc](https://sqlc.dev) from SQL files under `internal/store/queries/`:
+
+- `workflows.sql` — `CreateWorkflow`, `GetWorkflow`, `ListWorkflows`, `CompleteWorkflow`, `BumpVersion`
+- `events.sql` — `AppendEvent` (returns the assigned `idx` and `timestamp`), `GetHistory`
+- `timers.sql` — `InsertTimer`, `FetchDueTimers`, `MarkTimerFired`, `GetPendingTimers`
+
+The sqlc code generator runs via `make sqlc-gen`. Hand-editing the generated `db/` directory is forbidden; change the `.sql` files and regenerate.
+
+## Transactions
+
+The engine batches related writes into a single transaction. When a workflow task completes, the engine writes the resulting events (`ActivityScheduled`, `TimerScheduled`, possibly `WorkflowCompleted`) **and** enqueues the next task **in the same transaction**. If anything fails, the transaction rolls back and the worker's task ack also fails, so the engine eventually reclaims the task and retries the whole thing.
+
+This is the durability invariant: an event is in history if and only if the side effects associated with it are also persisted.
+
+## Optimistic concurrency
+
+`workflow_executions.version` is bumped on every state transition. The engine compares against the version it loaded before computing the next state and rolls back if the version moved underneath it. This prevents two engine instances (say, during a leader handoff) from corrupting state if they both try to advance the same workflow.
+
+## Retention
+
+Sched does not delete history. Once a workflow is `COMPLETED`, its row in `workflow_executions` and all rows in `workflow_events` stay forever. Plan accordingly: a system that processes millions of workflows per day needs a cold-storage or pruning strategy.
+
+A future archival path (Phase 5 or later) will move terminal workflows older than N days to S3-compatible storage. Until then, run `DELETE FROM workflow_executions WHERE status IN ('COMPLETED','FAILED','CANCELED') AND end_time < NOW() - INTERVAL '30 days'` if you want a cap; the foreign-key cascade handles `workflow_events`.
+
+## What to read next
+
+- [Architecture overview](/docs/architecture/overview) for what reads from and writes to these tables.
+- [Replay model](/docs/architecture/replay) for how `workflow_events` becomes durable workflow state.
+- [High availability](/docs/operating/ha) for what multiple engine instances do with `FOR UPDATE SKIP LOCKED`.
