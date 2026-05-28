@@ -264,7 +264,12 @@ func (c *Client) pollAndExecuteActivity(ctx context.Context) error {
 		}
 	}
 
-	result, err := activity(nil, input)
+	actCtx := &sdkActivityContext{
+		ctx:       ctx,
+		client:    c.client,
+		taskToken: resp.TaskToken,
+	}
+	result, err := activity(actCtx, input)
 
 	var resultBytes []byte
 	var errStr string
