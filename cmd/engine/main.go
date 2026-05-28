@@ -27,14 +27,14 @@ func main() {
 		logger.Error("open store", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	q, err := openQueue(redisAddr)
 	if err != nil {
 		logger.Error("open queue", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	e := engine.NewEngine(s)
 	metrics := observability.NewMetrics()
