@@ -1,5 +1,6 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { ArchitectureDiagram } from "../ArchitectureDiagram";
+import { CodeViewer } from "./CodeViewer";
 
 export const mdxComponents = {
   h1: (props: ComponentPropsWithoutRef<"h1">) => (
@@ -60,26 +61,23 @@ export const mdxComponents = {
       </code>
     );
   },
-  pre: ({ children, className, style, ...rest }: ComponentPropsWithoutRef<"pre">) => {
+  pre: ({ children, className, style }: ComponentPropsWithoutRef<"pre">) => {
     const isShiki = className?.includes("shiki");
+    const lang = className?.match(/language-([a-z0-9_+-]+)/i)?.[1];
     if (isShiki) {
       return (
-        <pre
-          className={`my-5 overflow-x-auto rounded-lg px-4 py-3 font-mono text-[13.5px] leading-6 ${className ?? ""}`}
-          style={style}
-          {...rest}
-        >
+        <CodeViewer language={lang} className={className} style={style}>
           {children}
-        </pre>
+        </CodeViewer>
       );
     }
     return (
-      <pre
-        className="my-5 overflow-x-auto rounded-lg border border-zinc-900 bg-black/40 px-4 py-3 font-mono text-[13.5px] leading-6 text-zinc-200"
-        {...rest}
+      <CodeViewer
+        language="text"
+        style={{ backgroundColor: "rgb(34 39 46)" }}
       >
-        {children}
-      </pre>
+        <code>{children}</code>
+      </CodeViewer>
     );
   },
   table: (props: ComponentPropsWithoutRef<"table">) => (

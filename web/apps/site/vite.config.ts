@@ -19,6 +19,17 @@ export default defineConfig({
             {
               theme: "github-dark-dimmed",
               defaultLanguage: "text",
+              transformers: [
+                {
+                  name: "expose-language",
+                  pre(node) {
+                    const lang = this.options.lang;
+                    if (!lang) return;
+                    const existing = (node.properties.class as string) ?? "";
+                    node.properties.class = `${existing} language-${lang}`.trim();
+                  },
+                },
+              ],
             },
           ],
         ],
