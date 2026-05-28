@@ -67,6 +67,22 @@ func main() {
 		return "retry demo done", nil
 	})
 
+	// SignalDemo blocks on WaitForSignal until SignalWorkflow is
+	// invoked against this workflow ID. It exercises the Phase 3.2
+	// signal API end-to-end.
+	client.RegisterWorkflow("SignalDemo", func(ctx sdk.WorkflowContext, input any) (any, error) {
+		log.Printf("SignalDemo waiting for signal on workflow %s", ctx.GetWorkflowID())
+		name, payload, err := ctx.WaitForSignal(120 * time.Second)
+		if err != nil {
+			return nil, err
+		}
+		if name == "" {
+			return "timed out", nil
+		}
+		log.Printf("SignalDemo received signal %q payload=%v", name, payload)
+		return fmt.Sprintf("got %s=%v", name, payload), nil
+	})
+
 	  
 	bgCtx := context.Background()
 
