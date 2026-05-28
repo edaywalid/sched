@@ -62,11 +62,8 @@ jobs:
           curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz | tar xz
           sudo mv migrate /usr/local/bin/migrate
 
-      - name: Generate protobuf and templates
-        run: |
-          make proto
-          go install github.com/a-h/templ/cmd/templ@latest
-          templ generate
+      - name: Generate protobuf
+        run: make proto
 
       - name: Apply migrations
         env:
@@ -104,11 +101,8 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
-      - name: Generate protobuf and templates
-        run: |
-          make proto
-          go install github.com/a-h/templ/cmd/templ@latest
-          templ generate
+      - name: Generate protobuf
+        run: make proto
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
