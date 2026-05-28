@@ -1,0 +1,121 @@
+# High availability
+
+Sched's HA story is intentionally small: one Postgres advisory lock decides which engine instance is the leader, standbys idle, workers scale horizontally. No external coordinator, no separate quorum service, no sidecar.
+
+## What "HA" actually means here
+
+| Mode             | What it gets you                                                            |
+| ---------------- | --------------------------------------------------------------------------- |
+| Single engine    | No availability story. If the engine dies, workflows stall until you restart it. |
+| Active-passive   | One engine serves traffic. Standbys take over within the retry interval if the leader dies. |
+| Multi-active     | Multiple engines own disjoint shards simultaneously. **Not shipped yet** (Phase 4.b). |
+
+Today's recommendation is active-passive with two engine instances and a small Postgres. Workers scale freely under either mode.
+
+## How leader election works
+
+Every engine instance, on startup, tries to acquire a Postgres advisory lock:
+
+```sql
+SELECT pg_try_advisory_lock($1)
+```
+
+`pg_try_advisory_lock` is non-blocking. It returns `true` if this connection now holds the lock, `false` if some other connection holds it. The lock is **session-scoped** — when the connection closes (process crash, network drop, explicit release), Postgres releases the lock automatically. This is the property that makes HA work without an external lease daemon.
+
+The default lock key is `0x53636845644c6431` (the ASCII bytes "SchEdLd1" packed into an int64). Override with `SCHED_LEADER_LOCK_KEY` if you run more than one logical sched cluster against the same Postgres:
+
+```yaml
+services:
+  sched-staging-engine-1:
+    environment:
+      SCHED_LEADER_LOCK_KEY: "1001"
+  sched-prod-engine-1:
+    environment:
+      SCHED_LEADER_LOCK_KEY: "1002"
+```
+
+## Acquire and renew
+
+The acquire loop tries every 5 seconds (configurable) until it succeeds. While it waits, the engine logs `"waiting for leader lease"` at info level. As soon as it acquires the lock, it logs `"acquired leader lease"` and starts serving the gRPC API, the timer manager, and the metrics server.
+
+A separate goroutine pings the lock-holding connection once per second with a 2-second timeout. If three pings fail in a row (the connection is wedged or the database has dropped it), the lease is marked lost.
+
+On lost lease, the engine triggers a graceful shutdown of its serving components and the process exits. Your orchestrator (Kubernetes, Nomad, systemd, Docker Compose with `restart: always`) is expected to bring it back up, at which point it joins the acquire loop again.
+
+## Failover timeline
+
+```
+T=0          leader_1 holds lock; serves traffic
+T=0          standby_1 waits in acquire loop
+T=5s         standby_1 retries — still false
+T=10s        standby_1 retries — still false
+...
+T=15s        leader_1 process killed
+T=15s        Postgres session ends, lock released
+T=20s        standby_1 retries — true; becomes leader
+T=20s        standby_1 starts gRPC + timer manager + metrics
+```
+
+In the worst case, failover takes one `retry_every` interval after the previous leader's connection actually drops. Postgres's `tcp_keepalives` settings decide how fast Postgres notices a wedged-network leader; tune those if you need sub-30-second failover.
+
+## What happens to in-flight work
+
+The engine's state is all in Postgres and Redis. There is no in-memory queue, no per-engine cache of workflow state that needs migration. When a new leader takes over:
+
+- **Pending timers**: the new leader's timer manager calls `RecoverPendingTimers` on boot, loading every unfired row from the `timers` table. Any timer whose `fire_at` already passed fires on the next poll cycle.
+- **In-flight workflow tasks**: tasks live on Redis Streams. The new leader's gRPC handlers serve workers that were already polling; workers retry their stream connections and get re-attached.
+- **In-flight activities**: same story. Workers re-poll, the engine re-serves.
+- **Open client connections**: dropped. Clients reconnect. `StartWorkflow` and `SignalWorkflow` are RPCs; the only delivery guarantee is "client retried until we got a response."
+
+The reclaim loop on the new leader catches any task that was in flight on the old leader at the moment of failure: the visibility timeout expires, the engine reclaims it via `XCLAIM`, and re-dispatches.
+
+## Workers do not need to know who is leader
+
+Workers connect to the engine's gRPC address. In a production setup that address is a load balancer or a DNS round-robin pointing at all engine replicas. Standbys do not accept gRPC connections, so the workers either land on the leader directly or get refused and retry.
+
+A simpler setup: point workers at a single DNS name that resolves to all engine pods (Kubernetes `ClusterIP` Service). Standbys close their listening socket; workers fail-fast and reconnect, eventually landing on the leader.
+
+## Graceful shutdown
+
+When the leader receives SIGTERM, it:
+
+1. Stops accepting new client RPCs (`StartWorkflow`, `SignalWorkflow`, etc).
+2. Cancels every in-flight long-poll and bidi stream with a clean termination.
+3. Lets workers finish acks for tasks they were currently completing.
+4. Releases the advisory lock and exits.
+
+The grace period defaults to 8 seconds. Bump it with `SCHED_SHUTDOWN_GRACE_SECONDS=30` if your activities take longer to drain.
+
+A standby promotes within the next retry interval after the leader releases the lock.
+
+## Worker scaling
+
+Workers are stateless. Scale them horizontally with no coordination. Each worker:
+
+- Opens a bidi gRPC stream (or long-poll, with `SCHED_WORKER_STREAMING=false`) to the engine.
+- Consumes from the configured `TASK_QUEUE` via Redis Streams consumer groups.
+- Acks each task on completion.
+
+Redis Streams handles fair distribution across the consumer group. There is no upper bound from sched's side; you are bounded by your Redis throughput and your activities' resource usage.
+
+In Docker Compose:
+
+```bash
+make scale N=5      # 5 worker replicas
+```
+
+In Kubernetes, set the worker Deployment's `replicas` and watch `sched_activities_executed_total` rate climb.
+
+## What active-passive does not solve
+
+- **Leader CPU bound.** All workflow logic, timer management, and dispatch happens on one engine instance. If you saturate it, more standbys do not help. Multi-active sharding (Phase 4.b) is the answer.
+- **Postgres single point of failure.** Sched assumes Postgres is highly available. Use a managed Postgres or a self-hosted setup with streaming replication and automatic failover (Patroni, Stolon, RDS Multi-AZ).
+- **Redis single point of failure.** Same story. Use Redis Sentinel, a managed Redis (ElastiCache, Memorystore), or accept that Redis failure stalls dispatch until it recovers.
+
+The good news: sched's failure model survives temporary Redis outage without data loss. Workflow state is in Postgres; on Redis recovery, the reclaim loop catches what was in flight, and new dispatch resumes from where it left off.
+
+## What to read next
+
+- [Observability](/docs/operating/observability) for the metrics that surface during failover.
+- [Persistence](/docs/architecture/persistence) for what is and is not in Postgres.
+- [Configuration](/docs/reference/configuration) for every env var that affects HA.

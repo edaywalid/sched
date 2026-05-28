@@ -1,0 +1,143 @@
+# Observability
+
+Three signals: structured logs, Prometheus metrics, OpenTelemetry traces. All three are on by default; the OTel exporter is the only one that needs configuration before it does anything.
+
+## Logs
+
+Every binary (engine, worker, dashboard) uses `slog` for structured logging. The handler is selected at boot:
+
+```
+SCHED_LOG_FORMAT=text     # default; human-readable
+SCHED_LOG_FORMAT=json     # for log aggregators
+SCHED_LOG_LEVEL=debug     # debug | info | warn | error; default info
+```
+
+Every log line carries a `component` attribute (`engine`, `worker`, `dashboard`) so you can split them apart in a shared sink.
+
+A typical line in production (JSON):
+
+```json
+{
+  "time": "2026-05-28T22:15:43Z",
+  "level": "INFO",
+  "msg": "workflow completed",
+  "component": "engine",
+  "workflow_id": "wf-abc",
+  "workflow_name": "MonthlyReport",
+  "duration_ms": 412
+}
+```
+
+In dev (text):
+
+```
+2026-05-28T22:15:43Z INF workflow completed  component=engine workflow_id=wf-abc workflow_name=MonthlyReport duration_ms=412
+```
+
+## Metrics
+
+The engine exposes Prometheus metrics on `:${SCHED_METRICS_PORT:-9090}/metrics`. A `/healthz` endpoint on the same port returns `200 OK` when the engine is up.
+
+### Counters
+
+| Name                                | Labels      | Increment                                          |
+| ----------------------------------- | ----------- | -------------------------------------------------- |
+| `sched_workflows_started_total`     |             | Every `StartWorkflow` RPC that accepts             |
+| `sched_workflows_completed_total`   | `status`    | Workflow reaches a terminal state (`completed`, `failed`) |
+| `sched_activities_executed_total`   | `status`    | Activity finishes (`completed`, `failed`)          |
+| `sched_activity_retries_total`      |             | Engine schedules a retry timer for an activity     |
+
+### Histograms
+
+| Name                              | Labels  | What it measures                              |
+| --------------------------------- | ------- | --------------------------------------------- |
+| `sched_activity_duration_seconds` |         | Wall clock from `PollActivityTask` to `CompleteActivity` |
+| `sched_task_poll_latency_seconds` | `kind`  | Time spent inside a poll RPC (`workflow` or `activity`) |
+
+Histogram buckets are exponential: `sched_activity_duration_seconds` covers roughly 50 ms to one hour; `sched_task_poll_latency_seconds` covers 1 ms to a few hours.
+
+### Wiring it into Grafana
+
+Scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: sched-engine
+    static_configs:
+      - targets: ['engine:9090']
+```
+
+A starter dashboard PromQL snippet:
+
+```promql
+# Workflows completed per second, by status
+rate(sched_workflows_completed_total[5m])
+
+# 95p activity duration
+histogram_quantile(0.95, sum by (le) (rate(sched_activity_duration_seconds_bucket[5m])))
+
+# Poll latency 95p, split by kind
+histogram_quantile(0.95,
+  sum by (kind, le) (rate(sched_task_poll_latency_seconds_bucket[5m])))
+```
+
+## Traces
+
+Tracing is off by default. Turn it on by setting `SCHED_OTLP_ENDPOINT`:
+
+```
+SCHED_OTLP_ENDPOINT=otel-collector:4317
+SCHED_OTEL_SERVICE_NAME=sched-engine     # optional; defaults to component name
+```
+
+The engine exports OTLP/gRPC, with `AlwaysSample` and a 5-second batch interval. Workers and the dashboard use the same env vars.
+
+### Span layout
+
+A `StartWorkflow` call produces a span tree like:
+
+```
+StartWorkflow                       (engine span, from otelgrpc server handler)
+  └─ workflow.MonthlyReport         (worker span, on first dispatch)
+       ├─ activity.LoadRows         (worker span, activity execution)
+       │    └─ http GET /db         (your activity's own spans)
+       └─ activity.SendEmail        (worker span)
+            └─ smtp Send            (your activity's own spans)
+```
+
+Span names:
+
+- `workflow.<workflowName>` — emitted once per workflow dispatch; attributes `workflow.id`, `workflow.run_id`, `workflow.name`
+- `activity.<activityName>` — emitted per activity execution; attributes `workflow.id`, `activity.name`, `activity.task_token`
+
+The gRPC integration uses `otelgrpc.NewClientHandler` and `otelgrpc.NewServerHandler`, so the engine's `StartWorkflow` span becomes the parent of the worker's `workflow.X` span automatically.
+
+### Local Jaeger
+
+Compose ships a `tracing` profile that brings up Jaeger:
+
+```bash
+docker compose --profile tracing up
+```
+
+Jaeger UI is on `:16686`. The engine, worker, and dashboard pick up `SCHED_OTLP_ENDPOINT=jaeger:4317` from the compose file.
+
+### Propagators
+
+`TraceContext` plus `Baggage`. Anything you put in the W3C trace context or in OTel baggage flows through gRPC calls into the engine, then back out into worker spans.
+
+## What to look at when things break
+
+| Symptom                                 | First place to look                                  |
+| --------------------------------------- | ---------------------------------------------------- |
+| Workflows stuck "RUNNING" forever       | `sched_task_poll_latency_seconds`; are workers polling? `workflow_events` for that workflow; what was the last event? |
+| Activity retries piling up              | `sched_activity_retries_total` rate vs. `sched_activities_executed_total{status="failed"}`; check activity span errors |
+| Engine restart, then nothing happens    | Logs at startup for "recovered N pending timers"; the timer manager polls every 250 ms |
+| Cancel does not stop the activity       | Activity must heartbeat to receive the cancel signal; see [Activities](/docs/concepts/activities#cancellation) |
+| Workflow returns the wrong result on retry | The workflow function is non-deterministic. See [Replay model](/docs/architecture/replay#determinism-the-hard-constraint) |
+
+## What to read next
+
+- [High availability](/docs/operating/ha) for what to watch during a leader handoff.
+- [Configuration](/docs/reference/configuration) for every env var that affects observability.
+- [Architecture overview](/docs/architecture/overview) for the surrounding system context.

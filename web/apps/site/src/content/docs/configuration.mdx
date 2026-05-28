@@ -1,0 +1,153 @@
+# Configuration
+
+Every binary is configured through environment variables. There are no config files, no flags. This page is the complete reference.
+
+## Engine
+
+The engine binary (`cmd/engine`) hosts the gRPC API, the timer manager, the dispatch loop, the leader election, and the metrics server.
+
+### Networking
+
+| Variable             | Default       | What it does                                          |
+| -------------------- | ------------- | ----------------------------------------------------- |
+| `ENGINE_PORT`        | `50051`       | gRPC listen port                                      |
+| `SCHED_METRICS_PORT` | `9090`        | Prometheus `/metrics` and `/healthz` listen port      |
+
+### Storage
+
+| Variable               | Default      | What it does                                                  |
+| ---------------------- | ------------ | ------------------------------------------------------------- |
+| `SCHED_POSTGRES_DSN`   | _(unset)_    | Postgres connection string. Unset falls back to in-memory store. |
+| `POSTGRES_DSN`         | _(unset)_    | Alias for `SCHED_POSTGRES_DSN`. The engine reads either.       |
+| `REDIS_ADDR`           | _(unset)_    | Redis address (e.g. `redis:6379`). Unset falls back to in-memory queue. |
+
+<Callout tone="warn">
+In-memory mode disables leader election and loses all state on restart. Use only for tests and the no-Redis fallback in local dev.
+</Callout>
+
+A typical Postgres DSN:
+
+```
+postgres://sched:sched@postgres:5432/sched?sslmode=disable
+```
+
+For RDS or managed Postgres with TLS:
+
+```
+postgres://user:pass@host:5432/sched?sslmode=require&pool_max_conns=20
+```
+
+### Leader election
+
+| Variable                  | Default                  | What it does                                          |
+| ------------------------- | ------------------------ | ----------------------------------------------------- |
+| `SCHED_LEADER_LOCK_KEY`   | `0x53636845644c6431`     | Postgres advisory lock key. Override per environment. |
+
+Set the same value on every engine instance in one logical cluster. Use distinct values to keep separate clusters (staging vs prod) from colliding on the same Postgres.
+
+### Shutdown
+
+| Variable                          | Default | What it does                                           |
+| --------------------------------- | ------- | ------------------------------------------------------ |
+| `SCHED_SHUTDOWN_GRACE_SECONDS`    | `8`     | Seconds to drain in-flight RPCs and streams on SIGTERM |
+
+Activities longer than the grace period get their workers terminated mid-execution. The engine reclaims the un-acked task on the next reclaim cycle and a new worker re-runs it.
+
+### Observability (engine + every other binary)
+
+These work for engine, worker, and dashboard.
+
+| Variable                    | Default       | What it does                                       |
+| --------------------------- | ------------- | -------------------------------------------------- |
+| `SCHED_LOG_LEVEL`           | `info`        | `debug`, `info`, `warn`, `error`                   |
+| `SCHED_LOG_FORMAT`          | `text`        | `text` or `json`                                   |
+| `SCHED_OTLP_ENDPOINT`       | _(unset)_     | OTLP/gRPC endpoint. Unset disables tracing.        |
+| `SCHED_OTEL_SERVICE_NAME`   | per-binary    | Service name reported in traces                    |
+
+When `SCHED_OTLP_ENDPOINT` is unset, the engine installs a no-op tracer. There is no overhead, no failing exporter background goroutine.
+
+## Worker
+
+The worker binary (`cmd/sdk`) is the demo worker; in production you build your own worker that imports the SDK. The variables below apply when you use the bundled binary as-is.
+
+| Variable                       | Default               | What it does                                        |
+| ------------------------------ | --------------------- | --------------------------------------------------- |
+| `ENGINE_ADDRESS`               | `localhost:50051`     | gRPC address of the engine                          |
+| `TASK_QUEUE`                   | `default`             | Task queue name to poll                             |
+| `SCHED_WORKER_STREAMING`       | `false`               | Opt in to bidi-streamed task delivery               |
+| `AUTO_START_TEST`              | `false`               | Register and start demo workflows on boot           |
+
+### Streaming dispatch
+
+Set `SCHED_WORKER_STREAMING=true` to use `StreamWorkflowTasks` and `StreamActivityTasks` instead of long-polling. The worker opens both streams in parallel and receives tasks as the engine produces them. Sub-millisecond delivery; clean shutdown when the worker exits.
+
+The long-poll mode is the default for backwards compatibility and as a fallback when streaming has issues. Both modes coexist in the same engine; flipping the worker flag does not require an engine restart.
+
+### `AUTO_START_TEST`
+
+Demo mode. The worker registers a handful of test workflows and starts them on boot, useful for kicking the tires. Do not run this in production; the workflows will collide with anything else you start and the workflows themselves are toys.
+
+## Dashboard
+
+The dashboard binary (`cmd/dashboard`) serves the React SPA and proxies gRPC calls to the engine.
+
+| Variable           | Default               | What it does                       |
+| ------------------ | --------------------- | ---------------------------------- |
+| `DASHBOARD_PORT`   | `8080`                | HTTP listen port                   |
+| `ENGINE_ADDRESS`   | `localhost:50051`     | gRPC address of the engine         |
+
+The dashboard does not authenticate. Put it behind a reverse proxy with auth (oauth2-proxy, Cloudflare Access, your own SSO) before exposing it publicly.
+
+## Testing
+
+The integration test suite uses a real Postgres and a real Redis. Configure them:
+
+| Variable                      | What it does                                         |
+| ----------------------------- | ---------------------------------------------------- |
+| `SCHED_TEST_POSTGRES_DSN`     | Postgres DSN for integration tests                   |
+| `SCHED_TEST_REDIS_ADDR`       | Redis address for integration tests                  |
+
+The CI workflow sets both against the Postgres 16 and Redis 7 service containers (see `.github/workflows/ci.yml`).
+
+## Examples
+
+### Single-engine local dev
+
+```
+SCHED_POSTGRES_DSN=postgres://sched:sched@localhost:5432/sched?sslmode=disable
+REDIS_ADDR=localhost:6379
+SCHED_LOG_FORMAT=text
+SCHED_LOG_LEVEL=debug
+```
+
+### Production engine
+
+```
+SCHED_POSTGRES_DSN=postgres://sched:****@postgres:5432/sched?sslmode=require
+REDIS_ADDR=redis:6379
+SCHED_LEADER_LOCK_KEY=1001
+SCHED_SHUTDOWN_GRACE_SECONDS=30
+SCHED_METRICS_PORT=9090
+SCHED_LOG_FORMAT=json
+SCHED_LOG_LEVEL=info
+SCHED_OTLP_ENDPOINT=otel-collector:4317
+SCHED_OTEL_SERVICE_NAME=sched-engine
+```
+
+### Production worker
+
+```
+ENGINE_ADDRESS=sched-engine.svc.cluster.local:50051
+TASK_QUEUE=payments
+SCHED_WORKER_STREAMING=true
+SCHED_LOG_FORMAT=json
+SCHED_LOG_LEVEL=info
+SCHED_OTLP_ENDPOINT=otel-collector:4317
+SCHED_OTEL_SERVICE_NAME=sched-worker-payments
+```
+
+## What to read next
+
+- [Operating: High availability](/docs/operating/ha) for the runtime implications of `SCHED_LEADER_LOCK_KEY` and friends.
+- [Operating: Observability](/docs/operating/observability) for what shows up under the OTLP and metrics endpoints.
+- [Architecture overview](/docs/architecture/overview) for what these processes actually do.
