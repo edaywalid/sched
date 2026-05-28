@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 560" role="img" aria-label="sched architecture: workers stream gRPC to the engine; the engine persists state in Postgres and dispatches tasks via Redis Streams, exposing Prometheus metrics and OTLP traces.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 580" role="img" aria-label="sched architecture: workers stream gRPC into the engine's frontend; the engine persists state in Postgres via the timer manager, dispatches tasks through Redis Streams, and exposes Prometheus metrics with OTLP traces.">
   <defs>
     <style>
       .bg       { fill: #0a0a0a; }
@@ -8,14 +8,14 @@
       .pill     { fill: #151517; stroke: #2d2d31; stroke-width: 1; }
       .title    { fill: #fafafa; font: 600 16px ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
       .label    { fill: #d4d4d8; font: 500 13px ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
-      .meta     { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", "SF Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
-      .mono     { fill: #a1a1aa; font: 400 12px ui-monospace, "JetBrains Mono", "SF Mono", monospace; }
-      .accent   { fill: #7BC74D; font: 600 12px ui-monospace, "JetBrains Mono", "SF Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
-      .arrow    { stroke: #5fa55f; stroke-width: 1.6; fill: none; opacity: 0.85; }
+      .meta     { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+      .mono     { fill: #a1a1aa; font: 400 11.5px ui-monospace, "JetBrains Mono", monospace; }
+      .arrow    { stroke: #5fa55f; stroke-width: 1.6; fill: none; opacity: 0.9; }
       .arrow-d  { stroke: #52525b; stroke-width: 1.4; fill: none; opacity: 0.7; }
-      .arrow-l  { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; }
+      .arrow-l  { fill: #8aa18a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; }
+      .arrow-ld { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; }
     </style>
-    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
       <path d="M0,0 L10,5 L0,10 z" fill="#5fa55f" />
     </marker>
     <marker id="ah-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
@@ -26,102 +26,114 @@
     </pattern>
   </defs>
 
-  <rect class="bg" width="1040" height="560" />
-  <rect width="1040" height="560" fill="url(#dots)" opacity="0.5" />
+  <rect class="bg" width="1040" height="580" />
+  <rect width="1040" height="580" fill="url(#dots)" opacity="0.5" />
 
   <!-- Section eyebrows -->
-  <text x="100" y="50" text-anchor="middle" class="meta">Workers</text>
-  <text x="520" y="50" text-anchor="middle" class="meta">Engine</text>
-  <text x="900" y="50" text-anchor="middle" class="meta">Stores</text>
+  <text x="120" y="40" text-anchor="middle" class="meta">Workers</text>
+  <text x="520" y="40" text-anchor="middle" class="meta">Engine</text>
+  <text x="910" y="40" text-anchor="middle" class="meta">Stores</text>
 
   <!-- Workers (left column) -->
   <g transform="translate(40, 80)">
-    <rect class="card" x="0" y="0" width="160" height="60" rx="10" />
-    <text class="title" x="20" y="28">Worker</text>
-    <text class="mono"  x="20" y="48">sdk.Client</text>
+    <rect class="card" x="0" y="0" width="160" height="56" rx="10" />
+    <text class="title" x="20" y="26">Worker</text>
+    <text class="mono"  x="20" y="44">sdk.Client</text>
   </g>
-  <g transform="translate(40, 165)">
-    <rect class="card" x="0" y="0" width="160" height="60" rx="10" />
-    <text class="title" x="20" y="28">Worker</text>
-    <text class="mono"  x="20" y="48">sdk.Client</text>
+  <g transform="translate(40, 170)">
+    <rect class="card" x="0" y="0" width="160" height="56" rx="10" />
+    <text class="title" x="20" y="26">Worker</text>
+    <text class="mono"  x="20" y="44">sdk.Client</text>
   </g>
-  <g transform="translate(40, 250)">
-    <rect class="card" x="0" y="0" width="160" height="60" rx="10" />
-    <text class="title" x="20" y="28">Worker</text>
-    <text class="mono"  x="20" y="48">sdk.Client</text>
+  <g transform="translate(40, 260)">
+    <rect class="card" x="0" y="0" width="160" height="56" rx="10" />
+    <text class="title" x="20" y="26">Worker</text>
+    <text class="mono"  x="20" y="44">sdk.Client</text>
   </g>
-  <text class="mono" x="120" y="345" text-anchor="middle">stateless, scale horizontally</text>
+  <text class="mono" x="120" y="345" text-anchor="middle">stateless · scale horizontally</text>
 
-  <!-- Engine (center) -->
+  <!-- Engine block -->
   <g transform="translate(360, 80)">
-    <rect class="card-acc" x="0" y="0" width="320" height="320" rx="14" />
-    <text class="title"  x="20" y="32">Engine</text>
-    <text class="mono"   x="20" y="54">sched-engine</text>
+    <rect class="card-acc" x="0" y="0" width="320" height="340" rx="14" />
+    <text class="title" x="20" y="32">Engine</text>
+    <text class="mono"  x="20" y="52">sched-engine</text>
 
-    <!-- Inner pills: subsystems -->
-    <g transform="translate(20, 80)">
-      <rect class="pill" x="0" y="0" width="280" height="46" rx="8" />
-      <text class="label" x="16" y="20">gRPC frontend</text>
-      <text class="mono"  x="16" y="36">StartWorkflow · SignalWorkflow · Stream*</text>
+    <!-- gRPC frontend (entrypoint, matches the worker arrows) -->
+    <g transform="translate(20, 78)">
+      <rect class="pill" x="0" y="0" width="280" height="58" rx="8" />
+      <text class="label" x="16" y="22">gRPC frontend</text>
+      <text class="mono"  x="16" y="40">Start · Signal · Cancel</text>
+      <text class="mono"  x="16" y="54">Stream{Workflow,Activity}Tasks</text>
     </g>
-    <g transform="translate(20, 134)">
-      <rect class="pill" x="0" y="0" width="280" height="46" rx="8" />
+
+    <!-- Dispatcher -->
+    <g transform="translate(20, 148)">
+      <rect class="pill" x="0" y="0" width="280" height="44" rx="8" />
       <text class="label" x="16" y="20">Dispatcher</text>
-      <text class="mono"  x="16" y="36">Redis Streams · XADD / XREADGROUP / XACK</text>
+      <text class="mono"  x="16" y="36">Redis Streams · XADD · XACK</text>
     </g>
-    <g transform="translate(20, 188)">
-      <rect class="pill" x="0" y="0" width="280" height="46" rx="8" />
+
+    <!-- Timer manager -->
+    <g transform="translate(20, 204)">
+      <rect class="pill" x="0" y="0" width="280" height="44" rx="8" />
       <text class="label" x="16" y="20">Timer manager</text>
       <text class="mono"  x="16" y="36">Postgres poll · FOR UPDATE SKIP LOCKED</text>
     </g>
-    <g transform="translate(20, 242)">
-      <rect class="pill" x="0" y="0" width="280" height="46" rx="8" />
+
+    <!-- Leader election -->
+    <g transform="translate(20, 260)">
+      <rect class="pill" x="0" y="0" width="280" height="44" rx="8" />
       <text class="label" x="16" y="20">Leader election</text>
-      <text class="mono"  x="16" y="36">pg_try_advisory_lock</text>
+      <text class="mono"  x="16" y="36">pg_try_advisory_lock · session-scoped</text>
     </g>
   </g>
 
-  <!-- Postgres (right top) -->
+  <!-- Postgres -->
   <g transform="translate(820, 80)">
-    <rect class="card" x="0" y="0" width="180" height="140" rx="10" />
+    <rect class="card" x="0" y="0" width="180" height="148" rx="10" />
     <text class="title" x="20" y="28">Postgres</text>
     <text class="mono"  x="20" y="54">workflow_executions</text>
     <text class="mono"  x="20" y="74">workflow_events</text>
     <text class="mono"  x="20" y="94">timers</text>
     <text class="mono"  x="20" y="114">tasks (legacy)</text>
+    <text class="mono"  x="20" y="134">leader_lock</text>
   </g>
 
-  <!-- Redis Streams (right middle) -->
-  <g transform="translate(820, 240)">
-    <rect class="card" x="0" y="0" width="180" height="100" rx="10" />
+  <!-- Redis Streams -->
+  <g transform="translate(820, 252)">
+    <rect class="card" x="0" y="0" width="180" height="92" rx="10" />
     <text class="title" x="20" y="28">Redis Streams</text>
     <text class="mono"  x="20" y="54">tasks:wf:default</text>
     <text class="mono"  x="20" y="74">tasks:act:default</text>
   </g>
 
-  <!-- Observability strip (bottom) -->
-  <g transform="translate(360, 440)">
+  <!-- Observability strip -->
+  <g transform="translate(360, 460)">
     <rect class="card" x="0" y="0" width="320" height="80" rx="10" />
-    <text class="title" x="20" y="30">Observability</text>
-    <text class="mono"  x="20" y="52">slog · Prometheus :9090 · OTLP /traces</text>
-    <text class="mono"  x="20" y="68">otelgrpc client + server interceptors</text>
+    <text class="title" x="20" y="28">Observability</text>
+    <text class="mono"  x="20" y="50">slog · Prometheus :9090/metrics</text>
+    <text class="mono"  x="20" y="66">OTLP/gRPC traces · otelgrpc interceptors</text>
   </g>
 
-  <!-- Arrows: workers <-> engine (bidi) -->
-  <path class="arrow"   d="M 200 110 C 270 110, 290 200, 358 200" marker-end="url(#ah)" />
-  <path class="arrow"   d="M 200 195 L 358 232"                    marker-end="url(#ah)" />
-  <path class="arrow"   d="M 200 280 C 270 280, 290 264, 358 264" marker-end="url(#ah)" />
-  <text class="arrow-l" x="280" y="100" text-anchor="middle">bidi gRPC</text>
+  <!-- Arrows: all three workers converge into the gRPC frontend pill -->
+  <!--    gRPC frontend pill absolute y range: 158 - 216 (center ~187) -->
+  <path class="arrow" d="M 200 108 C 280 108, 300 175, 360 175" marker-end="url(#ah)" />
+  <path class="arrow" d="M 200 198 L 360 188"                    marker-end="url(#ah)" />
+  <path class="arrow" d="M 200 288 C 280 288, 300 200, 360 200" marker-end="url(#ah)" />
+  <text class="arrow-l" x="280" y="92" text-anchor="middle">bidi gRPC</text>
 
-  <!-- Arrows: engine -> postgres / redis -->
-  <path class="arrow"   d="M 680 150 L 816 150" marker-end="url(#ah)" />
-  <path class="arrow"   d="M 680 290 L 816 290" marker-end="url(#ah)" />
-  <text class="arrow-l" x="748" y="142" text-anchor="middle">SQL</text>
-  <text class="arrow-l" x="748" y="282" text-anchor="middle">XADD / XACK</text>
+  <!-- Arrows out of the engine: SQL to Postgres, XADD/XACK to Redis -->
+  <!--    Timer manager pill absolute y range: 284 - 328 (center ~306) -->
+  <!--    Dispatcher pill absolute y range: 228 - 272 (center ~250) -->
+  <path class="arrow" d="M 680 250 C 740 250, 760 298, 816 298" marker-end="url(#ah)" />
+  <text class="arrow-l" x="752" y="284" text-anchor="middle">XADD · XACK</text>
 
-  <!-- Arrow: engine -> observability -->
-  <path class="arrow-d" d="M 520 400 L 520 436" marker-end="url(#ah-d)" />
+  <path class="arrow" d="M 680 306 C 740 306, 760 150, 816 150" marker-end="url(#ah)" />
+  <text class="arrow-l" x="752" y="218" text-anchor="middle">SQL · history</text>
+
+  <!-- Engine -> Observability -->
+  <path class="arrow-d" d="M 520 420 L 520 456" marker-end="url(#ah-d)" />
 
   <!-- Caption -->
-  <text x="520" y="544" text-anchor="middle" class="mono" opacity="0.7">Three processes, two stateful dependencies.</text>
+  <text x="520" y="566" text-anchor="middle" class="mono" opacity="0.7">Three processes, two stateful dependencies.</text>
 </svg>
