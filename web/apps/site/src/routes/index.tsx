@@ -76,13 +76,7 @@ function Hero() {
       <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-6 py-24 lg:grid-cols-[1.1fr_1fr] lg:py-32">
         <div>
           <Reveal>
-            <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/80 px-2.5 py-1 text-xs text-zinc-400">
-              <span className="size-1.5 animate-pulse rounded-full bg-accent-500" />
-              v2 in development · 100+ commits, 9 phases shipped
-            </div>
-          </Reveal>
-          <Reveal delay={0.05}>
-            <h1 className="mt-6 text-5xl font-medium leading-[1.05] tracking-tight text-zinc-50 sm:text-6xl">
+            <h1 className="text-5xl font-medium leading-[1.05] tracking-tight text-zinc-50 sm:text-6xl">
               Workflows that don&rsquo;t lose state.
             </h1>
           </Reveal>
@@ -470,7 +464,7 @@ function SiteFooter() {
           <span>
             © {new Date().getFullYear()} sched contributors. Built in Go.
           </span>
-          <span className="font-mono">v2-dev</span>
+          <span className="font-mono">Apache 2.0</span>
         </div>
       </div>
     </footer>
