@@ -6,15 +6,18 @@ Currently shipping toward production-grade per the
 
 ## Status
 
-| Capability                          | Today (v2 / Phase 2)                                  |
+| Capability                          | Today (v2 / through Phase 3.3)                        |
 | ----------------------------------- | ----------------------------------------------------- |
 | Workflow + activity execution       | ✅ Single engine, gRPC SDK                            |
 | Workflow state persistence          | ✅ PostgreSQL (pgx/v5 + sqlc, event-sourced history)  |
 | Web dashboard                       | ✅ templ + htmx, served by the dashboard service      |
 | Distributed task queue              | ✅ Redis Streams with consumer groups + reclaim       |
 | Durable timer rows (survive restart)| ✅ Persisted in Postgres, recovered on engine boot    |
-| `Sleep` survives worker crash       | ⏳ Phase 3 — still local `time.Sleep` on the worker   |
-| Replay, retries, signals, queries   | ⏳ Phase 3                                            |
+| Activity retries (exponential)      | ✅ `RetryPolicy.BackoffFor` + durable retry timers    |
+| Signals end-to-end (push + wait)    | ✅ `SignalWorkflow` + `WaitForSignal`                 |
+| Activity heartbeats                 | ✅ `RecordActivityHeartbeat` extends visibility       |
+| `Sleep` survives worker crash       | ⏳ Phase 3.4 — needs event-sourced replay             |
+| Workflow queries                    | ⏳ Phase 3.4                                          |
 | Sharded engine for HA               | ⏳ Phase 4                                            |
 | Structured logs / metrics / tracing | ⏳ Phase 5                                            |
 
