@@ -13,46 +13,32 @@ client.RegisterWorkflow("MonthlyReport", func(ctx sdk.WorkflowContext, _ any) (a
 
 Inspired by Temporal and Cadence. Single Go SDK, single binary, Postgres plus Redis. Apache 2.0.
 
-> Status: **alpha**, in active development toward `v0.1.0`. The architecture
-> described in [`docs/PRD.md`](docs/PRD.md) is partially shipped; see the
-> [capability table](#capabilities) below for what is real today.
+> Status: **alpha**, working toward `v0.1.0`. See [`BACKLOG.md`](BACKLOG.md)
+> for a current breakdown of what is shipped, what is in progress, and what
+> is planned. The full design lives in [`docs/PRD.md`](docs/PRD.md).
 
 ## Why
 
-- **State survives anything.** Every workflow transition is persisted to Postgres before the RPC returns. Engine restart, worker crash, network blip — the workflow resumes.
-- **Replay on yield.** Workflow functions are deterministic over their event history. When a worker dies the engine re-dispatches the task; the function re-runs against the same history with recorded commands turned into no-ops. This is the standard Temporal-style model, minus the platform.
-- **One binary to operate.** No coordinator, no sidecar. Active-passive HA is a Postgres advisory lock. Observability is a `/metrics` endpoint and an OTLP exporter.
-
-## Capabilities
-
-| Capability                                    | State    |
-| --------------------------------------------- | -------- |
-| Workflow + activity execution                 | shipped  |
-| Postgres-backed durable state (event-sourced) | shipped  |
-| Distributed task queue on Redis Streams       | shipped  |
-| Durable timers (`Sleep`) survive worker crash | shipped  |
-| Activity retries with exponential backoff     | shipped  |
-| Signals + `WaitForSignal` with crash recovery | shipped  |
-| Activity heartbeats + cancellation            | shipped  |
-| Workflow cancellation + execution timeout     | shipped  |
-| Bidi-streamed task dispatch (gRPC streams)    | shipped  |
-| Active-passive HA via Postgres advisory lock  | shipped  |
-| Structured logs (slog), Prometheus, OpenTelemetry | shipped |
-| Web dashboard + landing site (React 19, Tailwind v4) | shipped |
-| `golangci-lint` + GitHub Actions CI           | shipped  |
-| Workflow queries (`QueryWorkflow`)            | planned  |
-| Activity start-to-close timeouts              | planned  |
-| Multi-active sharded engine                   | planned  |
+- **State survives anything.** Every workflow transition is persisted to Postgres before the RPC returns. Engine restart, worker crash, network blip: the workflow resumes.
+- **Replay on yield.** Workflow functions are deterministic over their event history. When a worker dies the engine re-dispatches the task; the function re-runs against the same history with recorded commands turned into no-ops. The standard Temporal-style model, minus the platform.
+- **Small to operate.** No coordinator, no sidecar. Active-passive HA is a Postgres advisory lock. Observability is a `/metrics` endpoint and an OTLP exporter.
 
 ## Architecture
 
 ![Architecture diagram](assets/architecture.png)
 
-Three logical roles, deployable as one binary today:
+Three processes, two stateful dependencies.
 
-- **Engine** — public gRPC API, owns workflow state, writes history to Postgres, dispatches tasks via Redis Streams, exposes `/metrics`.
-- **Worker** — runs your code. Opens a bidi gRPC stream to the engine, executes workflow and activity tasks, acks completion.
-- **Dashboard** — React SPA embedded in a Go binary that reads through the engine's gRPC API.
+- **Engine.** gRPC frontend, durable state in Postgres, task dispatch through Redis Streams, timer manager, metrics on `:9090/metrics`. Run more than one for active-passive HA; the Postgres advisory lock elects the leader.
+- **Worker.** Your code. Imports the SDK, registers workflows and activities, opens a bidi gRPC stream to the engine, executes tasks, acks completion. Stateless and horizontally scalable.
+- **Dashboard.** A Go binary that serves the embedded React SPA. The SPA talks to the engine over gRPC; there is no direct database access from the dashboard.
+
+The two data stores hold the entire system of record:
+
+- **Postgres** keeps `workflow_executions`, `workflow_events` (the event log), `timers`, and the leader advisory lock. Schema lives under [`migrations/`](migrations/).
+- **Redis Streams** carries work in flight. Consumer groups give workers exclusive task delivery; the engine's reclaim loop catches anything a crashed worker did not ack.
+
+The longer walkthrough is in the docs site (`web/apps/site/src/content/docs/architecture.mdx`), and the design intent is in [`docs/PRD.md`](docs/PRD.md).
 
 ## Quickstart
 
@@ -214,13 +200,8 @@ CI runs `go build`, `go vet`, `go test -race`, and `golangci-lint` against Postg
 
 ## Roadmap
 
-Tracked in [`docs/PRD.md`](docs/PRD.md). The immediate runway:
-
-- Workflow queries (`QueryWorkflow` RPC, replay-mode read)
-- Activity start-to-close timeouts
-- Multi-active sharded engine (advisory lock per shard)
-- Docs site content + a first blog post
-- `v0.1.0` release
+See [`BACKLOG.md`](BACKLOG.md) for the current state of every workstream
+and [`docs/PRD.md`](docs/PRD.md) for the north-star architecture.
 
 ## License
 
