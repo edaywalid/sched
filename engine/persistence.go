@@ -6,13 +6,14 @@ import "github.com/edaywalid/sched/internal/store"
 // reference them without an extra import. The canonical definitions live
 // in internal/store.
 const (
-	EventTypeWorkflowStarted   = store.EventWorkflowStarted
-	EventTypeWorkflowCompleted = store.EventWorkflowCompleted
-	EventTypeWorkflowFailed    = store.EventWorkflowFailed
-	EventTypeActivityScheduled = store.EventActivityScheduled
-	EventTypeActivityCompleted = store.EventActivityCompleted
-	EventTypeActivityFailed    = store.EventActivityFailed
-	EventTypeTimerScheduled    = store.EventTimerScheduled
-	EventTypeTimerFired        = store.EventTimerFired
-	EventTypeSignalReceived    = store.EventSignalReceived
+	EventTypeWorkflowStarted        = store.EventWorkflowStarted
+	EventTypeWorkflowCompleted      = store.EventWorkflowCompleted
+	EventTypeWorkflowFailed         = store.EventWorkflowFailed
+	EventTypeActivityScheduled      = store.EventActivityScheduled
+	EventTypeActivityCompleted      = store.EventActivityCompleted
+	EventTypeActivityFailed         = store.EventActivityFailed
+	EventTypeActivityRetryScheduled = store.EventActivityRetryScheduled
+	EventTypeTimerScheduled         = store.EventTimerScheduled
+	EventTypeTimerFired             = store.EventTimerFired
+	EventTypeSignalReceived         = store.EventSignalReceived
 )

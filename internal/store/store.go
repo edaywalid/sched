@@ -26,15 +26,16 @@ const (
 )
 
 const (
-	EventWorkflowStarted   = "WorkflowStarted"
-	EventWorkflowCompleted = "WorkflowCompleted"
-	EventWorkflowFailed    = "WorkflowFailed"
-	EventActivityScheduled = "ActivityScheduled"
-	EventActivityCompleted = "ActivityCompleted"
-	EventActivityFailed    = "ActivityFailed"
-	EventTimerScheduled    = "TimerScheduled"
-	EventTimerFired        = "TimerFired"
-	EventSignalReceived    = "SignalReceived"
+	EventWorkflowStarted        = "WorkflowStarted"
+	EventWorkflowCompleted      = "WorkflowCompleted"
+	EventWorkflowFailed         = "WorkflowFailed"
+	EventActivityScheduled      = "ActivityScheduled"
+	EventActivityCompleted      = "ActivityCompleted"
+	EventActivityFailed         = "ActivityFailed"
+	EventActivityRetryScheduled = "ActivityRetryScheduled"
+	EventTimerScheduled         = "TimerScheduled"
+	EventTimerFired             = "TimerFired"
+	EventSignalReceived         = "SignalReceived"
 )
 
 // Workflow is the durable record of a single workflow execution.
