@@ -1,0 +1,107 @@
+# Install
+
+Three supported paths: Docker (recommended), source build, and engine-only for embedding.
+
+## Prerequisites
+
+- **Docker + Docker Compose**, OR
+- **Go 1.25** if building from source
+- **Postgres 16** and **Redis 7** if running components without Docker
+- **`pnpm` and Node 22** only if you also want to develop the dashboard or landing site
+
+The engine talks to Postgres and Redis. The worker talks to the engine. The dashboard talks to the engine. There is no peer-to-peer chatter.
+
+## Docker (recommended)
+
+```bash
+git clone https://github.com/edaywalid/sched.git
+cd sched
+make up
+```
+
+`make up` brings up the full stack: Postgres 16, Redis 7, a one-shot `migrate` job that applies the schema, then the engine, a worker, and the dashboard. On a clean machine the first run pulls images and finishes in about a minute.
+
+Verify it landed cleanly:
+
+```bash
+make ps              # all services up
+make health          # engine /healthz returns 200
+curl localhost:8080  # dashboard SPA loads
+```
+
+Stop with `make down`. State persists in named Docker volumes; the next `make up` reuses them. To wipe everything including data:
+
+```bash
+make clean
+```
+
+## From source
+
+You need Postgres and Redis running first. The Makefile assumes they live at the defaults below.
+
+```bash
+git clone https://github.com/edaywalid/sched.git
+cd sched
+
+make deps            # go mod tidy
+make proto           # regenerate protobuf stubs
+
+export SCHED_POSTGRES_DSN='postgres://postgres:postgres@localhost:5432/sched?sslmode=disable'
+export REDIS_ADDR='localhost:6379'
+
+make migrate-up      # apply schema
+make run-engine      # in one terminal
+make run-worker      # in another
+```
+
+The engine listens on `:50051` (gRPC), the metrics server on `:9090`, and the dashboard on `:8080`. Override any of those with the env vars in [Configuration](/docs/reference/configuration).
+
+## Engine without Postgres
+
+For experiments and unit tests you can run the engine with no Postgres at all. Leave `SCHED_POSTGRES_DSN` unset and the engine falls back to an in-memory store:
+
+```bash
+unset SCHED_POSTGRES_DSN
+make run-engine
+```
+
+<Callout tone="warn">
+The in-memory store loses every workflow on engine restart and disables leader election (there is nothing to take a lock against). Use it for tests, not for anything you care about.
+</Callout>
+
+## Postgres without Docker
+
+If you run Postgres yourself:
+
+```bash
+createdb sched
+psql sched -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+export SCHED_POSTGRES_DSN='postgres://your-user@localhost:5432/sched?sslmode=disable'
+make migrate-up
+```
+
+Migrations are `golang-migrate` files under `migrations/`. Run them yourself with `make migrate-up`, roll back with `make migrate-down`, and scaffold a new pair with `make migrate-new NAME=add_shards`.
+
+## Frontend
+
+The dashboard SPA and this docs site live in `web/`, a pnpm workspace.
+
+```bash
+cd web
+pnpm install
+pnpm --filter @sched/dashboard dev    # dashboard at :5173
+pnpm --filter @sched/site dev         # this site at :3000
+```
+
+Production bundles:
+
+```bash
+make web-build                        # bakes the dashboard into the Go binary
+pnpm --filter @sched/site build       # prerenders the site to dist/client
+```
+
+## Where to next
+
+- [Quickstart](/docs/get-started/quickstart) to actually run a workflow.
+- [Workflows](/docs/concepts/workflows) for the SDK overview.
+- [Architecture overview](/docs/architecture/overview) if you want to know what just started.

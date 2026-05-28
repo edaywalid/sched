@@ -1,0 +1,96 @@
+# Timers
+
+Timers are how workflows wait. The single primitive is `ctx.Sleep`, but its semantics are not the standard library `time.Sleep`. Understanding the difference is essential.
+
+## Sleep is not local
+
+```go
+ctx.Sleep(24 * time.Hour)
+```
+
+A naive reading: the workflow goroutine sleeps for 24 hours.
+
+What actually happens:
+
+1. The SDK calls `RegisterWorkflowTimer` on the engine over gRPC.
+2. The engine writes a `timers` row to Postgres with `fire_at = now() + 24h` and appends `TimerScheduled` to the workflow's history.
+3. The SDK panics with a yield sentinel. The worker recovers the panic, completes the workflow task with `Yielded: true`, and frees its goroutine.
+4. Twenty-four hours later, the engine's timer manager polls Postgres, sees the timer is due, appends `TimerFired` to history, and enqueues a new workflow task.
+5. A worker (possibly a different one) picks up the task, re-runs the workflow function against the extended history, and `Sleep` returns past its yield point.
+
+Your worker is not holding a thread for 24 hours. There is no in-memory timer. The wait is durable because it lives in Postgres.
+
+## Why this matters
+
+- A worker crash mid-sleep loses nothing. The timer row stays. When it fires, any healthy worker resumes the workflow.
+- An engine restart mid-sleep loses nothing. On boot the engine recovers all unfired timers (see [Recovery](#recovery-on-engine-restart)).
+- You can `Sleep(30 * 24 * time.Hour)` and survive deploys, network blips, and worker churn for a month.
+
+## Persistence
+
+The `timers` table:
+
+```
+timer_id     TEXT PRIMARY KEY
+workflow_id  TEXT REFERENCES workflow_executions(workflow_id)
+fire_at      TIMESTAMPTZ NOT NULL
+fired        BOOLEAN NOT NULL DEFAULT FALSE
+created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+```
+
+A partial index over `fire_at WHERE NOT fired` keeps the timer poll cheap even when total timer count grows. The timer manager fetches due rows with `FOR UPDATE SKIP LOCKED` so multiple engine instances in active-passive HA cannot double-fire the same timer.
+
+## Drift and precision
+
+The timer manager polls every 250 ms. A timer scheduled to fire at `T` will fire at some point in `[T, T + 250ms]` under steady-state load, plus whatever lag the Redis Streams dispatch adds (single-digit milliseconds at most). For a workflow sleeping 24 hours, this is invisible. For sub-second waits, you can observe the jitter.
+
+`ctx.Sleep` is not the right primitive for tight timing. If you need microsecond precision (you probably do not), use a sleep inside an activity. Activities run on workers without the durability cost.
+
+## Recovery on engine restart
+
+When the engine boots, it calls `RecoverPendingTimers`. This loads every unfired timer from the `timers` table (via the `GetPendingTimers` query) and re-registers them with the in-process timer manager. Any timer that became due during the restart fires on the next poll cycle.
+
+This means: an engine that was down for an hour will see a backlog of timers that should have fired in the past, and it fires them all in quick succession on boot. Workflows that depended on the timing get behind by however long the engine was down, then catch up.
+
+## Multiple sleeps in one workflow
+
+You can call `Sleep` more than once. Each call produces a separate `timers` row and a separate `TimerScheduled` event in history. Replay matches them in order:
+
+```go
+func MyWorkflow(ctx sdk.WorkflowContext, _ any) (any, error) {
+    ctx.QueueActivity("Step1", nil)
+    ctx.Sleep(1 * time.Hour)
+    ctx.QueueActivity("Step2", nil)
+    ctx.Sleep(1 * time.Hour)
+    ctx.QueueActivity("Step3", nil)
+    return "done", nil
+}
+```
+
+After the first hour, the workflow re-runs from the top. The first `QueueActivity` finds its matching `ActivityScheduled` in history and skips. The first `Sleep` finds both `TimerScheduled` and `TimerFired`, returns past its yield. The second `QueueActivity` runs (new RPC). The second `Sleep` finds only `TimerScheduled`, yields. And so on.
+
+## When not to use a timer
+
+- **Retries.** The engine's retry policy schedules its own timers for activity backoff. Do not roll your own retry loops in workflow code.
+- **Polling.** "Sleep 5s then check if X is ready" is an anti-pattern. Use a signal: have the producer call `SignalWorkflow` when X becomes ready.
+- **Heartbeats from inside the workflow.** Workflows do not heartbeat; activities do.
+
+## Timer + signal: which comes first
+
+A common pattern is "wait for a signal, but give up after a timeout":
+
+```go
+name, payload, err := ctx.WaitForSignal(30 * time.Minute)
+if err != nil { return nil, err }
+if name == "" {
+    return "timed out", nil
+}
+```
+
+The timeout is implemented by the engine, not by a `Sleep`. The engine returns `("", nil, nil)` after the duration. There is no `TimerScheduled` event written for a `WaitForSignal` timeout, only for explicit `Sleep` calls.
+
+## What to read next
+
+- [Signals](/docs/concepts/signals) for the other yielding primitive.
+- [Replay model](/docs/architecture/replay) for how yields are actually implemented.
+- [Persistence](/docs/architecture/persistence) for the `timers` table schema.

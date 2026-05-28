@@ -1,0 +1,109 @@
+# Signals
+
+A signal is an externally delivered message that a workflow can wait for. Use them for human-in-the-loop flows (approval, denial, manual override), for cross-workflow coordination, and for any case where the next step is gated on something the workflow cannot compute itself.
+
+## Sending a signal
+
+From any process that holds an SDK client, call `SignalWorkflow` with the workflow ID, a signal name, and an optional input payload:
+
+```go
+client, _ := sdk.NewClient("localhost:50051", "default")
+defer client.Close()
+
+err := client.SignalWorkflow(ctx, workflowID, "approve", map[string]any{
+    "approved_by":  "ops-on-call",
+    "approved_at":  time.Now().UTC(),
+})
+```
+
+The engine appends a `SignalReceived` event to the workflow's history immediately and returns. Delivery is durable from that moment: even if the engine restarts before the workflow processes the signal, the signal is in the history and will be replayed on the next dispatch.
+
+## Receiving a signal
+
+Inside a workflow function, call `WaitForSignal`:
+
+```go
+name, payload, err := ctx.WaitForSignal(24 * time.Hour)
+if err != nil {
+    return nil, err
+}
+if name == "" {
+    return "timed out", nil
+}
+```
+
+The signature is:
+
+```go
+WaitForSignal(timeout time.Duration) (name string, input any, err error)
+```
+
+- Returns the **next signal** the workflow received, in the order it was delivered. The matching is not by name; whatever signal the engine delivers next is what you get.
+- On timeout, returns `("", nil, nil)`. Check `name == ""` to distinguish a real signal from a timeout.
+- If `timeout <= 0`, the engine applies a default cap of 60 seconds. Pass a positive duration if you need to wait longer.
+- Returns a non-nil `err` only on context cancellation (engine shutdown, workflow cancellation).
+
+If you need to wait for a specific signal name, loop:
+
+```go
+for {
+    name, payload, err := ctx.WaitForSignal(time.Hour)
+    if err != nil {
+        return nil, err
+    }
+    if name == "approve" {
+        return ctx.QueueActivity("Apply", payload), nil
+    }
+    if name == "reject" {
+        return "rejected", nil
+    }
+    // ignore other signals
+}
+```
+
+## Buffering and ordering
+
+The engine buffers signals per workflow in a FIFO queue. If a signal arrives before the workflow calls `WaitForSignal`, it stays in the queue; the next `WaitForSignal` returns it immediately without yielding. If multiple signals arrive while the workflow is busy elsewhere, they queue up in arrival order.
+
+This matters for replay: the order signals appear in history is the order workflows observe them, and it is stable across re-dispatches.
+
+## How yielding works
+
+When a workflow calls `WaitForSignal` and no buffered signal is available, the SDK panics with a recoverable yield sentinel. The worker catches the panic, completes the workflow task with `Yielded: true`, and the workflow remains in an "awaiting dispatch" state on the engine.
+
+When a matching signal arrives, the engine claims the awaiting-dispatch flag and re-enqueues a workflow task. The worker re-runs the workflow function from the top against the extended history; `WaitForSignal` finds the recorded `SignalReceived` event during replay and returns the value without panicking.
+
+This is the same yield-then-resume model that powers `Sleep`. See [Replay model](/docs/architecture/replay) for the full mechanics.
+
+## Crash safety
+
+`WaitForSignal` survives engine restart and worker crash. The workflow's state is the history in Postgres; the awaiting-dispatch flag is reconstructable from "workflow yielded and no subsequent dispatch happened." When the signal finally arrives, the engine writes `SignalReceived` to history and the next dispatch reads it.
+
+If the worker dies mid-replay (after the engine sent the task but before the worker completed it), the engine's reclaim loop eventually re-dispatches the task. The replay machinery handles the second attempt the same way: scan history, find `SignalReceived`, return.
+
+## Timeout behavior
+
+The timeout is enforced engine-side. If no signal arrives within the duration, the engine wakes the workflow with `("", nil, nil)`. There is no history event written for a timeout — you only see it in your workflow's return value.
+
+If you need a durable record that "we timed out waiting for signal X," append the fact through an activity:
+
+```go
+name, _, err := ctx.WaitForSignal(24 * time.Hour)
+if err != nil { return nil, err }
+if name == "" {
+    ctx.QueueActivity("RecordTimeout", map[string]any{"workflow_id": ctx.WorkflowID()})
+    return "timed out", nil
+}
+```
+
+## Use signals, not queries
+
+A signal is one-way: external caller → workflow. There is no return value; the caller learns the outcome only by observing the workflow's eventual state, or via an activity the workflow runs in response.
+
+For external read-only inspection of workflow state, `QueryWorkflow` (Phase 3.4e, planned) will run the workflow in replay mode and invoke a registered query handler without writing history. Until that ships, expose state through activities or by reading the workflow's `result` field after completion.
+
+## What to read next
+
+- [Workflows](/docs/concepts/workflows) for the full primitive set.
+- [Timers](/docs/concepts/timers) for the other yielding primitive.
+- [Replay model](/docs/architecture/replay) for how yield and resume actually work.
