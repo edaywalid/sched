@@ -1,0 +1,62 @@
+# Architecture
+
+sched is a small system. Three processes, two stateful dependencies, one binary if you want it that way.
+
+<ArchitectureDiagram />
+
+Workers run your Go code and open bidirectional gRPC streams to the engine. The engine owns durable state in Postgres, dispatches tasks through Redis Streams, and exposes metrics and traces alongside its public API.
+
+## The three processes
+
+### Engine
+
+The engine owns workflow state. Every state transition is written to Postgres before the RPC returns. It runs three things in-process today:
+
+- A **gRPC frontend** that workers and the dashboard talk to.
+- A **task dispatcher** that pushes ready work onto Redis Streams.
+- A **timer manager** that polls the `timers` table and re-enqueues workflow tasks when a `Sleep` expires.
+
+In active-passive HA mode you can run more than one engine. Each tries to acquire a Postgres advisory lock; the holder serves traffic and the rest idle until the lease releases.
+
+### Worker
+
+A worker is a Go process that imports the SDK, registers workflow and activity functions, and opens a bidirectional gRPC stream to the engine. The engine pushes tasks onto the stream; the worker executes them and acknowledges completion on the same stream.
+
+Workers are stateless. You can scale them horizontally; the engine balances by stream-based dispatch and Redis Streams consumer groups.
+
+### Dashboard
+
+The dashboard is a Go binary that serves the React SPA from `web/apps/dashboard`. The SPA talks to the engine through the dashboard's gRPC-translating HTTP API. There is no direct database access from the dashboard.
+
+## The two data stores
+
+### Postgres
+
+Every durable thing lives here:
+
+- `workflow_executions` — one row per workflow with current state, input, result.
+- `workflow_events` — append-only history. The replay model reads this back to reconstruct workflow state.
+- `tasks` — workflow and activity tasks not yet acked by a worker.
+- `timers` — pending `Sleep` and retry timers.
+- `signals` — buffered signals waiting for the workflow's next dispatch.
+
+Schemas live in [`migrations/`](https://github.com/edaywalid/sched/tree/main/migrations) as `golang-migrate` files.
+
+### Redis Streams
+
+Redis carries work in flight. Each task queue (default name: `default`) maps to two streams: one for workflow tasks, one for activity tasks. Workers read with consumer groups (`XREADGROUP`); the engine acknowledges with `XACK` after the worker confirms completion.
+
+If a worker dies mid-task without acking, the engine's reclaim loop notices the un-acked entry after the visibility timeout and re-dispatches it.
+
+## What happens during a workflow
+
+A workflow's life looks like this:
+
+1. **Start.** A client calls `StartWorkflow`. The engine writes a `workflow_executions` row and a `WorkflowStarted` event, then enqueues a workflow task on the matching Redis stream.
+2. **Dispatch.** A worker on that task queue receives the task over its gRPC stream, decodes the history (which on the first run is just `WorkflowStarted`), and replays the workflow function.
+3. **Commands.** The function calls `QueueActivity`, `Sleep`, or `WaitForSignal`. These are sent back to the engine, which appends them to history and either enqueues activity tasks (immediate work) or schedules timers (delayed work).
+4. **Yield.** When the function reaches a primitive that needs to wait (sleep, signal, pending activity result), the SDK panics with a recoverable yield sentinel. The worker acks the workflow task.
+5. **Replay.** When the awaited event lands (timer fires, activity completes, signal arrives), the engine re-dispatches the workflow task with the extended history. The function re-runs from the top; recorded commands become no-ops; execution proceeds past the yield point.
+6. **Complete.** The function returns. The SDK reports the result. The engine writes `WorkflowCompleted` and the workflow is done.
+
+The same loop handles failures: a worker crash during step 3 or 4 just means the engine eventually times out the task and re-dispatches to another worker. The replay machinery makes the second attempt observationally indistinguishable from a normal yield-resume cycle.

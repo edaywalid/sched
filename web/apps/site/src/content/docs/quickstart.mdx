@@ -1,0 +1,67 @@
+# Quickstart
+
+Get a sched engine, worker, and dashboard running locally in three commands.
+
+## Prerequisites
+
+- Docker and Docker Compose
+- About 500 MB of free disk for the Postgres + Redis volumes
+
+You only need Go 1.25+ and pnpm if you plan to run the engine or dashboard outside Docker.
+
+## Bring up the stack
+
+```bash
+git clone https://github.com/edaywalid/sched.git
+cd sched
+make up
+```
+
+`make up` starts Postgres and Redis, runs database migrations as a one-shot service, then brings up the engine, a worker, and the dashboard. The first run pulls a couple of images and takes about a minute.
+
+Once it settles, open the dashboard:
+
+```
+http://localhost:8080
+```
+
+You should see an empty workflow list and a green health pill in the top right corner.
+
+## Run a demo workflow
+
+The bundled worker registers a few demo workflows when you flip a flag. Edit `docker-compose.yml` and set `AUTO_START_TEST=true` on the `worker` service, then:
+
+```bash
+make restart
+```
+
+Reload the dashboard. You should see a `HelloWorld` workflow execute, followed by a small fan-out of activities, all visible on the timeline.
+
+<Callout>
+The `AUTO_START_TEST` mode is for kicking the tires only. Disable it before you wire the worker against your own code.
+</Callout>
+
+## Start a workflow yourself
+
+You can hit the dashboard's HTTP API directly:
+
+```bash
+curl -X POST http://localhost:8080/api/workflows \
+  -H 'Content-Type: application/json' \
+  -d '{"workflowName":"HelloWorld","input":"world"}'
+```
+
+Or from Go:
+
+```go
+client, err := sdk.NewClient("localhost:50051", "default")
+if err != nil { log.Fatal(err) }
+defer client.Close()
+
+wfID, err := client.StartWorkflow(ctx, "HelloWorld", "world")
+```
+
+## Where to next
+
+- [Workflows](/docs/concepts/workflows) walks through writing your own workflow function.
+- [Architecture overview](/docs/architecture/overview) explains what's actually running under `make up`.

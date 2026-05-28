@@ -1,0 +1,72 @@
+# Workflows
+
+A workflow in sched is a Go function. It runs inside a worker process, and the engine treats it as the durable record of "what should happen and in what order."
+
+## The shape of a workflow
+
+```go
+client.RegisterWorkflow("MonthlyReport", func(ctx sdk.WorkflowContext, input any) (any, error) {
+    ctx.QueueActivity("LoadRows", "users")
+    ctx.Sleep(24 * time.Hour)
+    ctx.QueueActivity("Mail", "report-ready")
+    return "queued", nil
+})
+```
+
+`ctx` exposes the four primitives that distinguish a workflow function from a normal Go function:
+
+- `QueueActivity(name, input)` schedules an activity for execution. The engine records `ActivityScheduled` in the workflow's history.
+- `Sleep(duration)` registers a durable timer with the engine and yields. When the timer fires the engine re-dispatches the workflow task.
+- `WaitForSignal(timeout)` yields until an external signal arrives. When `SignalWorkflow` lands, the engine wakes the workflow.
+- The function's return value becomes the workflow result and is persisted as `WorkflowCompleted`.
+
+## Replay, not re-execution
+
+Workflow functions are re-run by the engine when something happens to the worker, like a crash. They are not re-executed from scratch; the engine dispatches the workflow's full event history, and the SDK replays the function against that history.
+
+```go
+ctx.QueueActivity("LoadRows", "users")   // on replay, skipped (already in history)
+ctx.Sleep(24 * time.Hour)                // on replay, yields and waits
+ctx.QueueActivity("Mail", "report")      // executes only after the timer fires
+```
+
+This is the same model Temporal and Cadence use. It puts one hard constraint on you:
+
+<Callout tone="warn">
+Workflow functions must be deterministic. Same history in, same commands out. Avoid `time.Now()`, `rand`, network calls, and goroutines inside a workflow. Use activities for anything non-deterministic.
+</Callout>
+
+## Workflow input and output
+
+Inputs and outputs are JSON-encoded on the wire. Use any type that's safe to round-trip through `encoding/json`:
+
+```go
+type ReportRequest struct {
+    Month string `json:"month"`
+    Region string `json:"region"`
+}
+
+client.RegisterWorkflow("MonthlyReport", func(ctx sdk.WorkflowContext, raw any) (any, error) {
+    var req ReportRequest
+    // The SDK passes input as decoded JSON. Re-marshal if you need a typed struct:
+    bytes, _ := json.Marshal(raw)
+    if err := json.Unmarshal(bytes, &req); err != nil {
+        return nil, err
+    }
+    // ...
+    return req.Month + "-" + req.Region, nil
+})
+```
+
+## Errors
+
+Returning an error from a workflow marks it as `Failed` in history. Errors from activities (and how they get retried) live on the [activities page](/docs/concepts/activities).
+
+## Cancellation and timeouts
+
+You can cancel a running workflow with `CancelWorkflow`, or set `workflow_execution_timeout_seconds` on `StartWorkflow`. Either path appends a `WorkflowCancelRequested` or `WorkflowTimedOut` event; the workflow's next dispatch sees the request and the function returns.
+
+## What to read next
+
+- [Architecture overview](/docs/architecture/overview) for what's happening on the other side of the gRPC stream.
+- [Quickstart](/docs/get-started/quickstart) if you haven't booted the stack yet.
