@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/edaywalid/sched/internal/observability"
 	"github.com/edaywalid/sched/internal/store"
 	"github.com/edaywalid/sched/proto"
 	"github.com/edaywalid/sched/queue"
@@ -41,8 +42,9 @@ const (
 // the workflow/activity events are persisted in the same call path.
 type EngineServer struct {
 	proto.UnimplementedEngineServiceServer
-	engine *Engine
-	queue  queue.Queue
+	engine  *Engine
+	queue   queue.Queue
+	metrics *observability.Metrics
 
 	mu              sync.Mutex
 	pendingWfTasks  map[string]*pendingWorkflowTask
@@ -97,10 +99,11 @@ type activityEnvelope struct {
 	Policy       RetryPolicy `json:"retry_policy"`
 }
 
-func NewEngineServer(engine *Engine, q queue.Queue) *EngineServer {
+func NewEngineServer(engine *Engine, q queue.Queue, m *observability.Metrics) *EngineServer {
 	s := &EngineServer{
 		engine:          engine,
 		queue:           q,
+		metrics:         m,
 		pendingWfTasks:  make(map[string]*pendingWorkflowTask),
 		pendingActTasks: make(map[string]*pendingActivityTask),
 		stopReclaim:     make(chan struct{}),
@@ -173,6 +176,9 @@ func (s *EngineServer) StartWorkflow(ctx context.Context, req *proto.StartWorkfl
 		return nil, fmt.Errorf("enqueue workflow task: %w", err)
 	}
 
+	if s.metrics != nil {
+		s.metrics.WorkflowsStarted.Inc()
+	}
 	slog.Info("queued workflow",
 		slog.String("workflow_name", req.WorkflowName),
 		slog.String("workflow_id", workflowID),
@@ -190,6 +196,12 @@ func (s *EngineServer) PollWorkflowTask(ctx context.Context, req *proto.PollWork
 		timeout = 60 * time.Second
 	}
 	queueName := workflowQueueName(req.TaskQueue)
+	pollStart := time.Now()
+	defer func() {
+		if s.metrics != nil {
+			s.metrics.TaskPollLatency.WithLabelValues("workflow").Observe(time.Since(pollStart).Seconds())
+		}
+	}()
 
 	msg, err := s.queue.Dequeue(ctx, queueName, timeout)
 	if err != nil {
@@ -245,6 +257,9 @@ func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.Comp
 			Details:    failed,
 		})
 		_ = s.engine.store.CompleteWorkflow(ctx, pending.WorkflowID, store.StatusFailed, nil, req.Error)
+		if s.metrics != nil {
+			s.metrics.WorkflowsCompleted.WithLabelValues("failed").Inc()
+		}
 	} else {
 		done, _ := json.Marshal(map[string]any{"result": json.RawMessage(req.Result)})
 		_ = s.engine.store.AppendEvent(ctx, store.Event{
@@ -253,6 +268,9 @@ func (s *EngineServer) CompleteWorkflowTask(ctx context.Context, req *proto.Comp
 			Details:    done,
 		})
 		_ = s.engine.store.CompleteWorkflow(ctx, pending.WorkflowID, store.StatusCompleted, req.Result, "")
+		if s.metrics != nil {
+			s.metrics.WorkflowsCompleted.WithLabelValues("completed").Inc()
+		}
 	}
 
 	if err := s.queue.Ack(ctx, pending.QueueName, pending.AckToken); err != nil {
@@ -287,6 +305,12 @@ func (s *EngineServer) PollActivityTask(ctx context.Context, req *proto.PollActi
 		timeout = 60 * time.Second
 	}
 	queueName := activityQueueName(req.TaskQueue)
+	pollStart := time.Now()
+	defer func() {
+		if s.metrics != nil {
+			s.metrics.TaskPollLatency.WithLabelValues("activity").Observe(time.Since(pollStart).Seconds())
+		}
+	}()
 
 	msg, err := s.queue.Dequeue(ctx, queueName, timeout)
 	if err != nil {
@@ -336,6 +360,11 @@ func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.Complete
 	delete(s.pendingActTasks, req.TaskToken)
 	s.mu.Unlock()
 
+	duration := time.Since(pending.DequeuedAt).Seconds()
+	if s.metrics != nil {
+		s.metrics.ActivityDuration.Observe(duration)
+	}
+
 	if req.Error != "" {
 		failed, _ := json.Marshal(map[string]any{
 			"activity_name": pending.ActivityName,
@@ -347,6 +376,9 @@ func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.Complete
 			Type:       EventTypeActivityFailed,
 			Details:    failed,
 		})
+		if s.metrics != nil {
+			s.metrics.ActivitiesExecuted.WithLabelValues("failed").Inc()
+		}
 
 		if pending.Attempt < pending.MaxAttempts {
 			s.scheduleActivityRetry(ctx, pending)
@@ -362,6 +394,9 @@ func (s *EngineServer) CompleteActivity(ctx context.Context, req *proto.Complete
 			Type:       EventTypeActivityCompleted,
 			Details:    done,
 		})
+		if s.metrics != nil {
+			s.metrics.ActivitiesExecuted.WithLabelValues("completed").Inc()
+		}
 	}
 
 	if err := s.queue.Ack(ctx, pending.QueueName, pending.AckToken); err != nil {
@@ -381,6 +416,9 @@ func (s *EngineServer) scheduleActivityRetry(ctx context.Context, pending *pendi
 	nextAttempt := pending.Attempt + 1
 	delay := pending.Policy.BackoffFor(int(nextAttempt))
 
+	if s.metrics != nil {
+		s.metrics.ActivityRetries.Inc()
+	}
 	retryEvent, _ := json.Marshal(map[string]any{
 		"activity_name": pending.ActivityName,
 		"attempt":       nextAttempt,
@@ -687,15 +725,16 @@ func workflowToProto(w *store.Workflow) *proto.WorkflowExecutionInfo {
 	return info
 }
 
-// StartGRPCServer wires the engine and queue into a gRPC server.
-func StartGRPCServer(engine *Engine, q queue.Queue, address string) error {
+// StartGRPCServer wires the engine, queue, and metrics into a gRPC
+// server. metrics may be nil in tests; in that case counters are skipped.
+func StartGRPCServer(engine *Engine, q queue.Queue, m *observability.Metrics, address string) error {
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 
 	grpcServer := grpc.NewServer()
-	engineServer := NewEngineServer(engine, q)
+	engineServer := NewEngineServer(engine, q, m)
 	proto.RegisterEngineServiceServer(grpcServer, engineServer)
 
 	slog.Info("engine gRPC server listening", slog.String("addr", address))
