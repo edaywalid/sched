@@ -59,7 +59,7 @@ function SiteHeader() {
           </a>
           <a
             href="/docs/get-started/quickstart"
-            className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1 text-zinc-100 hover:border-zinc-700"
+            className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1 text-zinc-100 transition-[border-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:border-zinc-700 active:scale-[0.97]"
           >
             Get started
           </a>
@@ -92,7 +92,7 @@ function Hero() {
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <a
                 href="/docs/get-started/quickstart"
-                className="inline-flex items-center rounded-md bg-zinc-50 px-4 py-2.5 text-sm font-medium text-zinc-950 transition-colors hover:bg-white"
+                className="inline-flex items-center rounded-md bg-zinc-50 px-4 py-2.5 text-sm font-medium text-zinc-950 transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-white active:scale-[0.97]"
               >
                 Get started
               </a>
@@ -100,7 +100,7 @@ function Hero() {
                 href="https://github.com/edaywalid/sched"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center rounded-md border border-zinc-800 px-4 py-2.5 text-sm text-zinc-200 transition-colors hover:border-zinc-700"
+                className="inline-flex items-center rounded-md border border-zinc-800 px-4 py-2.5 text-sm text-zinc-200 transition-[border-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:border-zinc-700 active:scale-[0.97]"
               >
                 Star on GitHub
               </a>
@@ -152,30 +152,26 @@ function Pillars() {
     <section className="border-b border-zinc-900">
       <div className="mx-auto max-w-6xl px-6 py-24">
         <Reveal>
-          <SectionEyebrow>Built for the gnarly stuff</SectionEyebrow>
-          <h2 className="mt-3 max-w-2xl text-3xl font-medium tracking-tight text-zinc-100 sm:text-4xl">
+          <h2 className="max-w-2xl text-3xl font-medium tracking-tight text-zinc-100 sm:text-4xl">
             Three ideas the engine takes seriously.
           </h2>
         </Reveal>
 
-        <div className="mt-14 grid gap-px overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900 md:grid-cols-3">
-          <PillarCard
+        <div className="mt-14 grid gap-y-10 md:grid-cols-3 md:gap-x-12 md:divide-x md:divide-zinc-900">
+          <PillarItem
             icon={Database}
             title="Durable state"
-            body="Every state transition is persisted to Postgres before the RPC returns. Workflows are append-only event logs. A restart loses nothing."
-            footnote="Phase 1"
+            body="Every state transition persists to Postgres before the RPC returns. Workflows are append-only event logs. A restart loses nothing."
           />
-          <PillarCard
+          <PillarItem
             icon={Repeat}
             title="Replay on yield"
-            body="Workflow functions are pure over input and history. When a worker dies the engine re-dispatches against the same history; recorded commands are no-ops on the second run."
-            footnote="Phase 3.4"
+            body="Workflow functions are deterministic over their event history. A worker dies, the engine re-dispatches against the same history, recorded commands become no-ops on the second run."
           />
-          <PillarCard
+          <PillarItem
             icon={Activity}
             title="Standby HA"
-            body="Engine instances hold a Postgres advisory lock. The leader serves traffic; standbys idle. Lose the leader and one promotes within a single retry interval."
-            footnote="Phase 4.a"
+            body="Engine replicas hold a Postgres advisory lock. The leader serves traffic, standbys idle. Lose the leader and one promotes within a single retry interval."
           />
         </div>
       </div>
@@ -183,26 +179,21 @@ function Pillars() {
   );
 }
 
-function PillarCard({
+function PillarItem({
   icon: Icon,
   title,
   body,
-  footnote,
 }: {
   icon: typeof Activity;
   title: string;
   body: string;
-  footnote: string;
 }) {
   return (
-    <article className="bg-zinc-950 p-7">
+    <div className="md:px-6 md:first:pl-0">
       <Icon className="size-5 text-accent-300" strokeWidth={1.75} />
-      <h3 className="mt-4 text-base font-medium text-zinc-100">{title}</h3>
+      <h3 className="mt-5 text-base font-medium text-zinc-100">{title}</h3>
       <p className="mt-3 text-sm leading-relaxed text-zinc-400">{body}</p>
-      <div className="mt-6 font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-        {footnote}
-      </div>
-    </article>
+    </div>
   );
 }
 
@@ -212,8 +203,7 @@ function SDKSection() {
       <div className="mx-auto max-w-6xl px-6 py-24">
         <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr]">
           <Reveal>
-            <SectionEyebrow>SDK</SectionEyebrow>
-            <h2 className="mt-3 text-3xl font-medium tracking-tight text-zinc-100 sm:text-4xl">
+            <h2 className="text-3xl font-medium tracking-tight text-zinc-100 sm:text-4xl">
               Write workflows as plain Go.
             </h2>
             <p className="mt-4 text-zinc-400">
@@ -298,27 +288,32 @@ function Capabilities() {
     <section className="border-b border-zinc-900">
       <div className="mx-auto max-w-6xl px-6 py-24">
         <Reveal>
-          <SectionEyebrow>Capabilities</SectionEyebrow>
-          <h2 className="mt-3 max-w-2xl text-3xl font-medium tracking-tight text-zinc-100 sm:text-4xl">
+          <h2 className="max-w-2xl text-3xl font-medium tracking-tight text-zinc-100 sm:text-4xl">
             What the engine does for you.
           </h2>
         </Reveal>
 
-        <div className="mt-14 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-14 grid grid-cols-1 md:grid-cols-2">
           {items.map((item, i) => (
-            <Reveal key={item.title} delay={i * 0.05}>
-              <article className="h-full rounded-xl border border-zinc-900 bg-zinc-950 p-6 transition-colors hover:border-zinc-800">
-                <item.icon
-                  className="size-4 text-accent-300"
-                  strokeWidth={1.75}
-                />
-                <h3 className="mt-4 text-sm font-medium text-zinc-100">
-                  {item.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                  {item.body}
-                </p>
-              </article>
+            <Reveal key={item.title} delay={i * 0.04}>
+              <div
+                className={[
+                  "flex gap-5 py-7",
+                  i % 2 === 0 ? "md:pr-10 md:border-r md:border-zinc-900" : "md:pl-10",
+                  i >= 2 ? "border-t border-zinc-900" : "",
+                  i === 1 ? "border-t border-zinc-900 md:border-t-0" : "",
+                ].join(" ")}
+              >
+                <div className="shrink-0">
+                  <span className="flex size-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-950">
+                    <item.icon className="size-4 text-accent-300" strokeWidth={1.75} />
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-medium text-zinc-100">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{item.body}</p>
+                </div>
+              </div>
             </Reveal>
           ))}
         </div>
@@ -357,8 +352,7 @@ curl -X POST http://localhost:8080/api/workflows \\
     <section className="border-b border-zinc-900">
       <div className="mx-auto max-w-6xl px-6 py-24">
         <Reveal>
-          <SectionEyebrow>Quickstart</SectionEyebrow>
-          <h2 className="mt-3 text-3xl font-medium tracking-tight text-zinc-100 sm:text-4xl">
+          <h2 className="text-3xl font-medium tracking-tight text-zinc-100 sm:text-4xl">
             Three commands to a running engine.
           </h2>
         </Reveal>
@@ -366,14 +360,9 @@ curl -X POST http://localhost:8080/api/workflows \\
           {STEPS.map((step, i) => (
             <Reveal key={step.n} delay={i * 0.05}>
               <div className="rounded-xl border border-zinc-900 bg-zinc-950 p-6">
-                <div className="flex items-baseline justify-between">
-                  <span className="font-mono text-xs uppercase tracking-wider text-accent-500">
-                    {step.n}
-                  </span>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-600">
-                    step
-                  </span>
-                </div>
+                <span className="font-mono text-xs uppercase tracking-wider text-accent-500">
+                  {step.n}
+                </span>
                 <h3 className="mt-3 text-sm font-medium text-zinc-100">
                   {step.title}
                 </h3>
