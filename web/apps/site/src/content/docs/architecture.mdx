@@ -34,11 +34,11 @@ The dashboard is a Go binary that serves the React SPA from `web/apps/dashboard`
 
 Every durable thing lives here:
 
-- `workflow_executions` — one row per workflow with current state, input, result.
-- `workflow_events` — append-only history. The replay model reads this back to reconstruct workflow state.
-- `tasks` — workflow and activity tasks not yet acked by a worker.
-- `timers` — pending `Sleep` and retry timers.
-- `signals` — buffered signals waiting for the workflow's next dispatch.
+- `workflow_executions`: one row per workflow with current state, input, result.
+- `workflow_events`: append-only history. The replay model reads this back to reconstruct workflow state.
+- `tasks`: workflow and activity tasks not yet acked by a worker.
+- `timers`: pending `Sleep` and retry timers.
+- `signals`: buffered signals waiting for the workflow's next dispatch.
 
 Schemas live in [`migrations/`](https://github.com/edaywalid/sched/tree/main/migrations) as `golang-migrate` files.
 

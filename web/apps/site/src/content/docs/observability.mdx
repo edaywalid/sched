@@ -107,8 +107,8 @@ StartWorkflow                       (engine span, from otelgrpc server handler)
 
 Span names:
 
-- `workflow.<workflowName>` — emitted once per workflow dispatch; attributes `workflow.id`, `workflow.run_id`, `workflow.name`
-- `activity.<activityName>` — emitted per activity execution; attributes `workflow.id`, `activity.name`, `activity.task_token`
+- `workflow.<workflowName>`: emitted once per workflow dispatch; attributes `workflow.id`, `workflow.run_id`, `workflow.name`
+- `activity.<activityName>`: emitted per activity execution; attributes `workflow.id`, `activity.name`, `activity.task_token`
 
 The gRPC integration uses `otelgrpc.NewClientHandler` and `otelgrpc.NewServerHandler`, so the engine's `StartWorkflow` span becomes the parent of the worker's `workflow.X` span automatically.
 

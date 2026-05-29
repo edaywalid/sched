@@ -83,7 +83,7 @@ If the worker dies mid-replay (after the engine sent the task but before the wor
 
 ## Timeout behavior
 
-The timeout is enforced engine-side. If no signal arrives within the duration, the engine wakes the workflow with `("", nil, nil)`. There is no history event written for a timeout — you only see it in your workflow's return value.
+The timeout is enforced engine-side. If no signal arrives within the duration, the engine wakes the workflow with `("", nil, nil)`. There is no history event written for a timeout; you only see it in your workflow's return value.
 
 If you need a durable record that "we timed out waiting for signal X," append the fact through an activity:
 

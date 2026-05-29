@@ -20,7 +20,7 @@ Every engine instance, on startup, tries to acquire a Postgres advisory lock:
 SELECT pg_try_advisory_lock($1)
 ```
 
-`pg_try_advisory_lock` is non-blocking. It returns `true` if this connection now holds the lock, `false` if some other connection holds it. The lock is **session-scoped** — when the connection closes (process crash, network drop, explicit release), Postgres releases the lock automatically. This is the property that makes HA work without an external lease daemon.
+`pg_try_advisory_lock` is non-blocking. It returns `true` if this connection now holds the lock, `false` if some other connection holds it. The lock is **session-scoped**: when the connection closes (process crash, network drop, explicit release), Postgres releases the lock automatically. This is the property that makes HA work without an external lease daemon.
 
 The default lock key is `0x53636845644c6431` (the ASCII bytes "SchEdLd1" packed into an int64). Override with `SCHED_LEADER_LOCK_KEY` if you run more than one logical sched cluster against the same Postgres:
 
@@ -47,12 +47,12 @@ On lost lease, the engine triggers a graceful shutdown of its serving components
 ```
 T=0          leader_1 holds lock; serves traffic
 T=0          standby_1 waits in acquire loop
-T=5s         standby_1 retries — still false
-T=10s        standby_1 retries — still false
+T=5s         standby_1 retries: still false
+T=10s        standby_1 retries: still false
 ...
 T=15s        leader_1 process killed
 T=15s        Postgres session ends, lock released
-T=20s        standby_1 retries — true; becomes leader
+T=20s        standby_1 retries: true; becomes leader
 T=20s        standby_1 starts gRPC + timer manager + metrics
 ```
 

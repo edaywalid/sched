@@ -121,7 +121,7 @@ function Meta({
       <MetaCell label="Duration">{formatDuration(execution)}</MetaCell>
       <MetaCell label="Run ID">
         <span className="font-mono text-xs text-zinc-300">
-          {execution.runId || "—"}
+          {execution.runId || "-"}
         </span>
       </MetaCell>
     </div>
@@ -199,7 +199,7 @@ function DetailSkeleton() {
 }
 
 function formatDuration(exec: { startTime: number; endTime: number }): string {
-  if (!exec.startTime) return "—";
+  if (!exec.startTime) return "-";
   const end = exec.endTime || Date.now();
   const ms = end - exec.startTime;
   if (ms < 1000) return `${ms} ms`;

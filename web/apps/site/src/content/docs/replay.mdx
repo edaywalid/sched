@@ -21,7 +21,7 @@ The replay model sidesteps the problem entirely. It does not preserve a paused g
 
 ## The yield sentinel
 
-When a workflow primitive needs to wait — `Sleep`, `WaitForSignal`, or anything else that cannot complete synchronously — the SDK panics with a typed sentinel:
+When a workflow primitive needs to wait (`Sleep`, `WaitForSignal`, or anything else that cannot complete synchronously), the SDK panics with a typed sentinel:
 
 ```go
 // sdk/replay.go
