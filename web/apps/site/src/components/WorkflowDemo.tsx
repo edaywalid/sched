@@ -48,7 +48,7 @@ export function WorkflowDemo() {
       <div className="flex items-center justify-between border-b border-zinc-900 px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-zinc-400">MonthlyReport</span>
-          <span className="font-mono text-[10px] text-zinc-600">
+          <span className="font-mono text-[10px] text-zinc-400">
             wf-1a2b3c
           </span>
         </div>
@@ -76,7 +76,7 @@ export function WorkflowDemo() {
                   {ev.detail}
                 </span>
               ) : null}
-              <span className="ml-auto font-mono text-[10px] text-zinc-600">
+              <span className="ml-auto font-mono text-[10px] text-zinc-400">
                 +{ev.id * 200}ms
               </span>
             </motion.li>
@@ -87,7 +87,7 @@ export function WorkflowDemo() {
           <motion.li
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.5 }}
-            className="mt-1 flex items-baseline gap-2.5 text-xs text-zinc-600"
+            className="mt-1 flex items-baseline gap-2.5 text-xs text-zinc-400"
           >
             <span className="mt-1 size-1.5 shrink-0 animate-pulse rounded-full bg-accent-500" />
             <span>awaiting…</span>
@@ -95,7 +95,7 @@ export function WorkflowDemo() {
         ) : null}
       </ol>
 
-      <div className="border-t border-zinc-900 px-4 py-2 font-mono text-[10px] text-zinc-600">
+      <div className="border-t border-zinc-900 px-4 py-2 font-mono text-[10px] text-zinc-400">
         {visible.length}/{SCRIPT.length} events
       </div>
     </div>

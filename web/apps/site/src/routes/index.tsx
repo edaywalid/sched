@@ -449,7 +449,7 @@ function SiteFooter() {
             ]}
           />
         </div>
-        <div className="mt-14 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-900 pt-8 text-xs text-zinc-600">
+        <div className="mt-14 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-900 pt-8 text-xs text-zinc-500">
           <span>
             © {new Date().getFullYear()} sched contributors. Built in Go.
           </span>

@@ -7,6 +7,24 @@
   --color-accent-700: oklch(56% 0.13 145);
   --color-accent-900: oklch(35% 0.09 145);
 
+  /*
+   * Re-tint Tailwind's cold zinc neutrals toward the brand hue (145).
+   * Same lightness as the default ramp, same chroma magnitude (0.005 to 0.014),
+   * but pulled green so the neutrals belong to the same color family as the
+   * accent instead of reading as a separate system.
+   */
+  --color-zinc-50:  oklch(0.985 0.004 145);
+  --color-zinc-100: oklch(0.967 0.005 145);
+  --color-zinc-200: oklch(0.92  0.006 145);
+  --color-zinc-300: oklch(0.871 0.008 145);
+  --color-zinc-400: oklch(0.705 0.010 145);
+  --color-zinc-500: oklch(0.552 0.012 145);
+  --color-zinc-600: oklch(0.442 0.013 145);
+  --color-zinc-700: oklch(0.37  0.011 145);
+  --color-zinc-800: oklch(0.274 0.008 145);
+  --color-zinc-900: oklch(0.21  0.006 145);
+  --color-zinc-950: oklch(0.141 0.005 145);
+
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
