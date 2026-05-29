@@ -1,6 +1,68 @@
 # Changelog
 
-## [Unreleased] Phase 3.1 through 3.3 and Phase 5.1, 5.2: Retries, Signals, Heartbeats, Observability
+## [v0.1.0-alpha.1] - 2026-05-29
+
+First tagged alpha. The engine is functional end to end against
+Postgres and Redis: durable workflow + activity execution, replay on
+yield, durable timers, retries with backoff, signals, heartbeats,
+active-passive HA, full observability. The React 19 dashboard is
+embedded in the Go binary; the TanStack Start landing + MDX docs
+site under `web/apps/site` is deploy-ready (Netlify-prerendered).
+
+See [BACKLOG.md](BACKLOG.md) for what shipped, what is in progress,
+and what gates `v0.1.0` proper.
+
+### Highlights
+
+- Durable workflow + activity execution. Every state transition
+  persists to Postgres before the RPC returns.
+- Distributed task queue on Redis Streams with consumer groups,
+  reclaim, and visibility timeouts.
+- Replay-on-yield via panic + recover sentinel. Workflow functions
+  re-run against extended history on re-dispatch.
+- Durable timers. `ctx.Sleep` survives worker crash and engine
+  restart; the timer manager recovers unfired rows on boot.
+- Activity retries with exponential backoff via the engine's
+  default `RetryPolicy`.
+- Signals end to end: `SignalWorkflow` push, `ctx.WaitForSignal`
+  pull, crash-safe through the replay machinery.
+- Activity heartbeats with `cancel_requested` propagation.
+- Workflow cancellation and execution timeout.
+- Bidi-streamed task dispatch (`StreamWorkflowTasks`,
+  `StreamActivityTasks`).
+- Active-passive HA via Postgres advisory lock; failover within
+  the retry interval.
+- Structured logging (`slog`), Prometheus metrics on `/metrics`,
+  OpenTelemetry tracing with `otelgrpc` interceptors across
+  engine, worker, and dashboard.
+- Sectioned React 19 dashboard with animated workflow rows, system
+  status, history timeline.
+- TanStack Start landing + MDX docs runtime: 11 pages
+  (install, quickstart, workflows, activities, signals, timers,
+  architecture overview, replay model, persistence, observability,
+  high availability, configuration reference), Shiki code blocks
+  with copy buttons and language labels.
+- Static prerender script + `netlify.toml` for hostable docs.
+- New SVG architecture and lifecycle diagrams replacing the legacy
+  PNG.
+
+### Known gaps (gating v0.1.0)
+
+- `QueryWorkflow` RPC for read-only replay-mode queries.
+- Activity start-to-close timeouts.
+- Multi-active sharded engine (PRD Phase 4.b).
+
+[v0.1.0-alpha.1]: https://github.com/edaywalid/sched/releases/tag/v0.1.0-alpha.1
+
+---
+
+## Earlier development history
+
+The sections below predate the v0.1.0-alpha.1 cut and describe the
+phases that landed on `main` between the project's start and this
+release. They are preserved verbatim for reference.
+
+### Phase 3.1 through 3.3 and Phase 5.1, 5.2: Retries, Signals, Heartbeats, Observability
 
 Activities retry with exponential backoff on failure. Signals are
 deliverable end to end via the new `WaitForSignal` RPC. Long running
@@ -265,7 +327,7 @@ SDK skips every prior `QueueActivity` and `Sleep` via the cursor.
 - OpenTelemetry tracing across engine, worker, and dashboard
   (Phase 5.4).
 
-## [Unreleased] Phase 2: Real Queue and Durable Timers
+### Phase 2: Real Queue and Durable Timers
 
 Workers in separate processes share work via a real distributed
 queue. Timer state survives engine restarts. Workflow crash resume
@@ -308,7 +370,7 @@ during `Sleep` still waits on Phase 3.4 (replay).
 - `docker-compose.yml` drops the `worker` `container_name` so the
   service can be scaled with `--scale worker=N`.
 
-## [Unreleased] Phase 1: Durable Single Node
+### Phase 1: Durable Single Node
 
 Workflow state survives engine restarts. Foundation laid for the
 multi phase rewrite described in [`docs/PRD.md`](./docs/PRD.md).
