@@ -2,27 +2,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 580" role="img" aria-label="sched architecture: workers stream gRPC into the engine's frontend; the engine persists state in Postgres via the timer manager, dispatches tasks through Redis Streams, and exposes Prometheus metrics with OTLP traces.">
   <defs>
     <style>
-      .bg       { fill: #0a0a0a; }
-      .card     { fill: #111113; stroke: #27272a; stroke-width: 1; }
-      .card-acc { fill: #0f1611; stroke: #4d8a4f; stroke-width: 1.5; }
-      .pill     { fill: #151517; stroke: #2d2d31; stroke-width: 1; }
-      .title    { fill: #fafafa; font: 600 16px ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
-      .label    { fill: #d4d4d8; font: 500 13px ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
-      .meta     { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
-      .mono     { fill: #a1a1aa; font: 400 11.5px ui-monospace, "JetBrains Mono", monospace; }
-      .arrow    { stroke: #5fa55f; stroke-width: 1.6; fill: none; opacity: 0.9; }
-      .arrow-d  { stroke: #52525b; stroke-width: 1.4; fill: none; opacity: 0.7; }
-      .arrow-l  { fill: #8aa18a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; }
-      .arrow-ld { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; }
+      .bg       { fill: oklch(0.141 0.005 145); }
+      .card     { fill: oklch(0.21 0.006 145); stroke: oklch(0.274 0.008 145); stroke-width: 1; }
+      .card-acc { fill: oklch(0.20 0.018 145); stroke: oklch(0.56 0.13 145); stroke-width: 1.5; }
+      .pill     { fill: oklch(0.18 0.006 145); stroke: oklch(0.27 0.008 145); stroke-width: 1; }
+      .title    { fill: oklch(0.985 0.004 145); font: 600 16px ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
+      .label    { fill: oklch(0.871 0.008 145); font: 500 13px ui-sans-serif, system-ui, "Segoe UI", sans-serif; }
+      .meta     { fill: oklch(0.552 0.012 145); font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+      .mono     { fill: oklch(0.705 0.010 145); font: 400 11.5px ui-monospace, "JetBrains Mono", monospace; }
+      .arrow    { stroke: oklch(0.68 0.16 145); stroke-width: 1.6; fill: none; opacity: 0.9; }
+      .arrow-d  { stroke: oklch(0.442 0.013 145); stroke-width: 1.4; fill: none; opacity: 0.7; }
+      .arrow-l  { fill: oklch(0.82 0.16 145); font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; }
+      .arrow-ld { fill: oklch(0.552 0.012 145); font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; }
     </style>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5fa55f" />
+      <path d="M0,0 L10,5 L0,10 z" fill="oklch(0.68 0.16 145)" />
     </marker>
     <marker id="ah-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-      <path d="M0,0 L10,5 L0,10 z" fill="#52525b" />
+      <path d="M0,0 L10,5 L0,10 z" fill="oklch(0.442 0.013 145)" />
     </marker>
     <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-      <circle cx="1" cy="1" r="1" fill="#1c1c1f" />
+      <circle cx="1" cy="1" r="1" fill="oklch(0.245 0.007 145)" />
     </pattern>
   </defs>
 

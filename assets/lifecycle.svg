@@ -2,19 +2,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 360" role="img" aria-label="A workflow lifecycle: events are appended to history; workflow function yields on Sleep; engine fires the timer and re-dispatches; replay skips recorded commands and reaches the next yield point.">
   <defs>
     <style>
-      .bg     { fill: #0a0a0a; }
-      .swim   { fill: #0e0e10; stroke: #1f1f23; stroke-width: 1; }
-      .ev     { fill: #131316; stroke: #2d2d31; stroke-width: 1; }
-      .ev-acc { fill: #0f1611; stroke: #4d8a4f; stroke-width: 1.5; }
-      .ev-y   { fill: #15110a; stroke: #806a3c; stroke-width: 1.5; }
-      .title  { fill: #fafafa; font: 600 14px ui-sans-serif, system-ui, sans-serif; }
-      .lane   { fill: #71717a; font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
-      .ev-l   { fill: #d4d4d8; font: 500 11px ui-monospace, "JetBrains Mono", monospace; }
-      .ev-l-acc { fill: #7BC74D; font: 600 11px ui-monospace, "JetBrains Mono", monospace; }
-      .ev-l-y { fill: #d4a849; font: 600 11px ui-monospace, "JetBrains Mono", monospace; }
-      .caption{ fill: #71717a; font: 400 11px ui-monospace, "JetBrains Mono", monospace; }
-      .axis   { stroke: #27272a; stroke-width: 1; opacity: 0.6; }
-      .yieldln{ stroke: #806a3c; stroke-width: 1; stroke-dasharray: 4 3; opacity: 0.6; }
+      .bg     { fill: oklch(0.141 0.005 145); }
+      .swim   { fill: oklch(0.18 0.006 145); stroke: oklch(0.235 0.007 145); stroke-width: 1; }
+      .ev     { fill: oklch(0.21 0.006 145); stroke: oklch(0.27 0.008 145); stroke-width: 1; }
+      .ev-acc { fill: oklch(0.20 0.018 145); stroke: oklch(0.56 0.13 145); stroke-width: 1.5; }
+      .ev-y   { fill: oklch(0.18 0.020 75); stroke: oklch(0.55 0.10 75); stroke-width: 1.5; }
+      .title  { fill: oklch(0.985 0.004 145); font: 600 14px ui-sans-serif, system-ui, sans-serif; }
+      .lane   { fill: oklch(0.552 0.012 145); font: 500 11px ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+      .ev-l   { fill: oklch(0.871 0.008 145); font: 500 11px ui-monospace, "JetBrains Mono", monospace; }
+      .ev-l-acc { fill: oklch(0.82 0.16 145); font: 600 11px ui-monospace, "JetBrains Mono", monospace; }
+      .ev-l-y { fill: oklch(0.78 0.13 75); font: 600 11px ui-monospace, "JetBrains Mono", monospace; }
+      .caption{ fill: oklch(0.552 0.012 145); font: 400 11px ui-monospace, "JetBrains Mono", monospace; }
+      .axis   { stroke: oklch(0.274 0.008 145); stroke-width: 1; opacity: 0.6; }
+      .yieldln{ stroke: oklch(0.55 0.10 75); stroke-width: 1; stroke-dasharray: 4 3; opacity: 0.6; }
     </style>
   </defs>
 
@@ -31,11 +31,11 @@
 
   <!-- Time axis -->
   <line class="axis" x1="140" y1="280" x2="1020" y2="280" />
-  <circle cx="180"  cy="280" r="3" fill="#52525b" />
-  <circle cx="380"  cy="280" r="3" fill="#52525b" />
-  <circle cx="560"  cy="280" r="3" fill="#52525b" />
-  <circle cx="740"  cy="280" r="3" fill="#52525b" />
-  <circle cx="940"  cy="280" r="3" fill="#52525b" />
+  <circle cx="180"  cy="280" r="3" fill="oklch(0.442 0.013 145)" />
+  <circle cx="380"  cy="280" r="3" fill="oklch(0.442 0.013 145)" />
+  <circle cx="560"  cy="280" r="3" fill="oklch(0.442 0.013 145)" />
+  <circle cx="740"  cy="280" r="3" fill="oklch(0.442 0.013 145)" />
+  <circle cx="940"  cy="280" r="3" fill="oklch(0.442 0.013 145)" />
   <text class="caption" x="180" y="305" text-anchor="middle">t0</text>
   <text class="caption" x="380" y="305" text-anchor="middle">t0+ms</text>
   <text class="caption" x="560" y="305" text-anchor="middle">yield</text>
